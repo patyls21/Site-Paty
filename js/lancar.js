@@ -145,7 +145,12 @@ const Lancar = (() => {
     }
     const blob = await r.blob(); await cache.delete('arquivo');
     const nome = decodeURIComponent(r.headers.get('X-Nome') || 'comprovante');
-    const arquivo = new File([blob], nome, { type: blob.type });
+    destinoComprovante(new File([blob], nome, { type: blob.type }));
+  }
+
+  // com o comprovante em mãos (compartilhado ou escolhido na galeria): pagar parte de um gasto ou criar um novo
+  function destinoComprovante(arquivo) {
+    const nome = arquivo.name || 'comprovante';
     abrir(`<h3>Comprovante recebido 📎</h3><div style="padding:12px 16px 16px;display:grid;gap:10px">
       <p class="sub" style="margin:0"><b>${U.esc(nome)}</b>. O que você quer fazer com ele?</p>
       <button type="button" class="btn" id="r-pagar">✅ Pagar minha parte de um gasto</button>
@@ -170,6 +175,8 @@ const Lancar = (() => {
       <div class="tiles">
         <button class="tile" id="t-novo"><i>➕</i><b>Novo gasto</b><span>O que foi, como foi pago e como dividir.</span></button>
         <button class="tile" id="t-pagar"><i>✅</i><b>Pagar minha parte</b><span>${e ? (minhas.length ? `${minhas.length} pendente(s) · ${U.brl(totalMinhas)}` : 'Nada pendente') : 'Escolha quem você é'}</span></button>
+        <label class="tile tile-largo" id="t-comp"><i>📎</i><b>Tenho um comprovante</b><span>Escolha o print ou PDF na galeria e diga a que gasto ele pertence.</span>
+          <input type="file" id="t-arq" accept="image/*,application/pdf" hidden></label>
       </div>
       ${frase ? `<div class="acerto">${U.esc(frase)}</div>` : ''}
       ${e ? `<p class="sub">Você está usando como <b>${U.esc(n(e))}</b>. <a href="#" id="trocar-eu">Não sou eu</a></p>` : ''}
@@ -181,6 +188,7 @@ const Lancar = (() => {
       ${document.body.classList.contains('solo') ? '' : '<p class="sub" style="margin-top:14px">📱 No celular, use a <a href="formulario.html" style="color:var(--realce)">página só do formulário</a>: dá para instalar como app e receber comprovantes do banco.</p>'}`;
     App.$('#t-novo').onclick = () => novoGasto();
     App.$('#t-pagar').onclick = () => pendencias();
+    App.$('#t-arq').onchange = ev => { const f = ev.target.files[0]; if (f) destinoComprovante(f); ev.target.value = ''; };
     const t = App.$('#trocar-eu'); if (t) t.onclick = ev => { ev.preventDefault(); try { localStorage.removeItem('nc-eu-' + (App.estado.uid || 'local')); } catch {} App.pedirEu().then(() => App.mostrarAtual()); };
     el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => detalhe(b.dataset.g));
     const sub = location.hash.split('/')[1];

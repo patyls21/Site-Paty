@@ -132,6 +132,7 @@ body.solo{padding:0 0 24px}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
 .tile{display:grid;gap:4px;text-align:left;padding:18px;border:1px solid var(--border);border-left:4px solid var(--amarelo);border-radius:var(--raio);background:var(--card);color:var(--text);font-family:var(--fonte);cursor:pointer}
 .tile:hover{background:var(--card2)}
+.tile-largo{grid-column:1/-1;cursor:pointer;border-left-color:var(--realce)}
 .tile i{font-style:normal;font-size:1.8rem} .tile b{font-size:1.15rem} .tile span{color:var(--muted);font-size:.85rem}
 .pend{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;margin-bottom:8px;border:1px solid var(--border);border-radius:var(--raio);background:var(--card);cursor:pointer}
 .pend:hover{background:var(--card2)}
