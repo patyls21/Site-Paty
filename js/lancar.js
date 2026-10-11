@@ -250,9 +250,32 @@ const Lancar = (() => {
   App.novoGasto = novoGasto; App.detalheGasto = detalhe; App.pendencias = pendencias;
   App.verComprovantes = verComprovantes; App.temComprovante = g => compsDoGasto(g).length > 0;
 
+  // ---------- app Android próprio: entrega o comprovante compartilhado em pedaços (base64) ----------
+  let pronto = false; const fila = [];
+  function chegou(arquivo) { if (pronto) destinoComprovante(arquivo); else fila.push(arquivo); }
+  window.NCNativo = (() => {
+    let nome = '', tipo = '', partes = [];
+    return {
+      inicio(n, t) { nome = n || 'comprovante'; tipo = t || 'application/octet-stream'; partes = []; },
+      parte(b64) { partes.push(b64); },
+      fim() {
+        try {
+          const bin = atob(partes.join('')), u8 = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          chegou(new File([u8], nome, { type: tipo }));
+        } catch (err) { alert('Não consegui ler o comprovante compartilhado: ' + err.message); }
+        partes = [];
+      },
+      erro(msg) { alert('Não consegui receber o comprovante: ' + msg); }
+    };
+  })();
+
   return {
     aoIniciar() {
-      (async () => { await App.pedirEu(); App.mostrarAtual(); await receberCompartilhado(); })().catch(console.error);
+      (async () => {
+        await App.pedirEu(); App.mostrarAtual(); await receberCompartilhado();
+        pronto = true; while (fila.length) destinoComprovante(fila.shift());
+      })().catch(console.error);
     }
   };
 })();

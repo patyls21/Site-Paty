@@ -1,0 +1,43 @@
+name: Montar app Android
+
+# Monta o aplicativo "Lançar gasto" (arquivo .apk) e publica na página de Releases.
+# Roda sozinho quando algo em android/ muda, ou manualmente em Actions > Montar app Android > Run workflow.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Montar o APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Nomear o arquivo
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk nosso-controle.apk
+
+      - name: Publicar na página de Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-android
+          name: App Android (Lançar gasto)
+          body: Aplicativo Android do formulário Lançar gasto. Baixe o arquivo nosso-controle.apk e instale no celular.
+          files: nosso-controle.apk

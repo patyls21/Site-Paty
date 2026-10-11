@@ -3,3 +3,7 @@ backup-financeiro-*.json
 *.backup.json
 .claude/
 
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
