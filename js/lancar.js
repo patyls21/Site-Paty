@@ -123,16 +123,35 @@ const Lancar = (() => {
     if (lista.length) verComps(lista, 0, null, g.descricao);
   }
 
+  // anexa (mais) um comprovante a uma parte que já está paga
+  function anexarDepois(g, p) {
+    App.form(`Anexar comprovante de ${n(p)}`, [
+      { k: 'comp', rotulo: 'Imagem ou PDF', tipo: 'file', accept: ACEITA, dica: `${g.descricao} · ${U.dataBR(g.data)}` }
+    ], {}, async f => {
+      if (!(f.comp && f.comp.size)) { alert('Escolha um arquivo.'); return false; }
+      const gg = gastoPorId(g.id), pag = { ...gg.pag };
+      pag[p] = { ...(pag[p] || {}), comps: [...((pag[p] && pag[p].comps) || [])] };
+      try { pag[p].comps.push(await anexar(f.comp, gg, p)); }
+      catch (err) { alert('Comprovante não anexado: ' + err.message); return false; }
+      Store.gastos.set(gg.id, { ...gg, pag });
+      setTimeout(() => detalhe(g.id), 60); // reabre o detalhe já com o comprovante
+      return true;
+    }, null, 'Anexar');
+  }
+
   async function detalhe(id) {
     const g = typeof id === 'string' ? gastoPorId(id) : id; if (!g) return;
     const e = await App.pedirEu();
     const comps = pessoa => ((g.pag && g.pag[pessoa] && g.pag[pessoa].comps) || []).map(i => Store.comprovantes.lista().find(c => c.id === i)).filter(Boolean);
     const linha = p => {
       const parte = U.parteDe(g, p), pago = g.pag[p] && g.pag[p].pago, pend = U.pendente(g, p);
-      const cs = comps(p).map(c => `<button type="button" class="btn sec mini-b" data-c="${c.id}">📎 ${U.esc(c.nome.slice(0, 18))}</button>`).join(' ');
+      const cp = comps(p);
+      const acoesPago = `${cp.length ? `<button type="button" class="olho" data-ver="${p}" aria-label="Ver comprovante" title="Ver comprovante">👁</button>` : ''}
+        <button type="button" class="btn sec mini-b" data-anexar="${p}" title="Anexar comprovante">${cp.length ? '＋' : '📎 Anexar comprovante'}</button>
+        <button type="button" class="mini" data-d="${p}" title="Desfazer">↩</button>`;
       return `<tr><td><b>${U.esc(n(p))}</b>${g.adiantou === p ? ' <span class="chip ambos">adiantou</span>' : ''}</td><td class="v">${U.brl(parte)}</td>
-        <td>${parte === 0 ? '—' : pend ? '<span class="chip ambos">⏳ pendente</span>' : `<span class="chip ok">✔ pago${g.pag[p].data ? ' ' + U.dataBR(g.pag[p].data).slice(0, 5) : ''}</span>`} ${cs}</td>
-        <td>${pend ? `<button type="button" class="btn ${p === e ? '' : 'sec'} mini-b" data-p="${p}">${p === e ? 'Pagar minha parte' : 'Marcar como pago'}</button>` : pago && parte > 0 ? `<button type="button" class="mini" data-d="${p}" title="Desfazer">↩</button>` : ''}</td></tr>`;
+        <td>${parte === 0 ? '—' : pend ? '<span class="chip ambos">⏳ pendente</span>' : `<span class="chip ok">✔ pago${g.pag[p].data ? ' ' + U.dataBR(g.pag[p].data).slice(0, 5) : ''}</span>`}</td>
+        <td>${pend ? `<button type="button" class="btn ${p === e ? '' : 'sec'} mini-b" data-p="${p}">${p === e ? 'Pagar minha parte' : 'Marcar como pago'}</button>` : pago && parte > 0 ? acoesPago : ''}</td></tr>`;
     };
     abrir(`<h3>${U.esc(g.descricao)}</h3><div style="padding:12px 16px 16px;display:grid;gap:10px">
       <p class="sub" style="margin:0">${U.dataBR(g.data)} · ${nomeForma(g.forma)} · ${U.esc(g.categoria)} · dividido ${rotuloDiv(g)}</p>
@@ -141,7 +160,8 @@ const Lancar = (() => {
         : '<p class="sub">Este gasto foi lançado antes do controle de pagamento das partes.</p>'}
       <div class="acoes">${App.editarGasto ? '<button type="button" class="btn sec" id="d-edit">Editar</button>' : ''}<button type="button" class="btn" data-fechar>Fechar</button></div></div>`, d => {
       const ed = d.querySelector('#d-edit'); if (ed) ed.onclick = () => { d.close(); App.editarGasto(g.id); };
-      d.querySelectorAll('[data-c]').forEach(b => b.onclick = () => verComp(Store.comprovantes.lista().find(c => c.id === b.dataset.c), () => detalhe(g.id)));
+      d.querySelectorAll('[data-ver]').forEach(b => b.onclick = () => verComps(comps(b.dataset.ver), 0, () => detalhe(g.id), g.descricao));
+      d.querySelectorAll('[data-anexar]').forEach(b => b.onclick = () => { d.close(); anexarDepois(g, b.dataset.anexar); });
       d.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { d.close(); pagarParte(g, null, b.dataset.p); });
       d.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { marcarPendente(g, b.dataset.d); d.close(); detalhe(g.id); });
     });
