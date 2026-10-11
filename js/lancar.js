@@ -1,0 +1,190 @@
+// Fluxo de lançamento: novo gasto, pagar a minha parte (com comprovante), pendências e compartilhar do banco.
+const Lancar = (() => {
+  const FORMAS = [['pix', 'Pix'], ['inter', 'Cartão Inter'], ['dinheiro', 'Dinheiro'], ['debito', 'Débito'], ['credito', 'Crédito'], ['outro', 'Outro']];
+  const ACEITA = 'image/*,application/pdf';
+  const n = k => App.nome(k);
+  const dlg = () => App.$('#dlg');
+  const gastoPorId = id => Store.gastos.lista().find(g => g.id === id);
+  const nomeForma = v => (FORMAS.find(f => f[0] === v) || [, v])[1];
+  const rotuloDiv = g => g.pessoa === 'meio' || g.pessoa === 'ambos' ? 'meio a meio' : 'só ' + n(g.pessoa);
+
+  async function anexar(arquivo, g, pessoa) {
+    const file = arquivo instanceof File ? arquivo : new File([arquivo], arquivo.name || 'comprovante', { type: arquivo.type });
+    const dataUrl = await U.anexo(file);
+    return Store.comprovantes.add({
+      mes: g.mes, nome: file.name || 'comprovante', tipo: dataUrl.startsWith('data:application/pdf') ? 'pdf' : 'img',
+      dataUrl, enviadoEm: U.hoje(), gastoId: g.id, pessoa
+    }).id;
+  }
+
+  // ---------- novo gasto ----------
+  async function novoGasto(op = {}) {
+    const e = await App.pedirEu(); if (!e) return;
+    const o = App.outro(e);
+    App.form('Novo gasto', [
+      { k: 'descricao', rotulo: 'O que foi', req: true },
+      { k: 'valor', rotulo: 'Valor total (R$)', inputmode: 'decimal', req: true },
+      { k: 'data', rotulo: 'Data', tipo: 'date', req: true },
+      { k: 'categoria', rotulo: 'Categoria', tipo: 'select', opcoes: Store.categorias.map(c => [c, c]) },
+      { k: 'forma', rotulo: 'Foi pago em', tipo: 'select', opcoes: FORMAS },
+      { k: 'pessoa', rotulo: 'Dividir entre', tipo: 'select', opcoes: [['meio', 'Meio a meio'], [e, 'Só eu'], [o, 'Só ' + n(o)]] },
+      { k: 'situacao', rotulo: 'Quem pagou agora?', tipo: 'select', opcoes: [
+        ['eu_tudo', `Eu paguei o valor todo (${n(o)} me deve a parte dele)`],
+        ['eu_parte', 'Paguei só a minha parte (cada um paga a sua)'],
+        ['outro_tudo', `${n(o)} pagou o valor todo (eu devo a minha parte)`],
+        ['ninguem', 'Ainda ninguém pagou']] },
+      { k: 'comp', rotulo: 'Comprovante de quem pagou (opcional)', tipo: 'file', accept: ACEITA, dica: op.arquivo ? `Comprovante recebido: ${op.arquivo.name}` : 'Imagem ou PDF. Dá para anexar depois também.' }
+    ], { data: U.hoje(), forma: 'inter', pessoa: 'meio', situacao: 'eu_tudo', categoria: Store.categorias[0] }, async f => {
+      const valor = U.parseValor(f.valor);
+      if (!(valor > 0)) { alert('Valor inválido.'); return false; }
+      const pag = { A: { pago: false }, B: { pago: false } };
+      let adiantou = '', quem = e;
+      if (f.situacao === 'eu_tudo') { adiantou = e; pag[e] = { pago: true, data: f.data }; }
+      else if (f.situacao === 'eu_parte') pag[e] = { pago: true, data: f.data };
+      else if (f.situacao === 'outro_tudo') { adiantou = o; quem = o; pag[o] = { pago: true, data: f.data }; }
+      const g = Store.gastos.add({ data: f.data, descricao: f.descricao.trim(), valor, categoria: f.categoria, pessoa: f.pessoa, forma: f.forma, mes: U.mesDe(f.data), pag, adiantou, criadoPor: e });
+      const arq = (f.comp && f.comp.size) ? f.comp : op.arquivo;
+      if (arq && f.situacao !== 'ninguem') {
+        try { pag[quem].comps = [await anexar(arq, g, quem)]; Store.gastos.set(g.id, g); }
+        catch (err) { alert('Gasto salvo, mas o comprovante não foi anexado: ' + err.message); }
+      }
+      return true;
+    }, null, 'Salvar gasto');
+  }
+
+  // ---------- pagar a parte de alguém ----------
+  async function pagarParte(g, arquivo, quem) {
+    const p = quem || await App.pedirEu(); if (!p) return;
+    App.form(`Pagar parte de ${n(p)}: ${U.brl(U.parteDe(g, p))}`, [
+      { k: 'data', rotulo: 'Data do pagamento', tipo: 'date', req: true },
+      { k: 'comp', rotulo: 'Comprovante (imagem ou PDF)', tipo: 'file', accept: ACEITA, dica: arquivo ? `Comprovante recebido: ${arquivo.name}` : `${g.descricao} · ${U.dataBR(g.data)}` }
+    ], { data: U.hoje() }, async f => {
+      const gg = gastoPorId(g.id), pag = { ...gg.pag };
+      pag[p] = { ...(pag[p] || {}), pago: true, data: f.data, comps: [...((pag[p] && pag[p].comps) || [])] };
+      const arq = (f.comp && f.comp.size) ? f.comp : arquivo;
+      if (arq) {
+        try { pag[p].comps.push(await anexar(arq, gg, p)); }
+        catch (err) { alert('Comprovante não anexado: ' + err.message); return false; }
+      }
+      Store.gastos.set(gg.id, { ...gg, pag });
+      return true;
+    }, null, 'Confirmar pagamento');
+  }
+
+  function marcarPendente(g, p) { // desfaz um pagamento marcado por engano
+    const pag = { ...g.pag, [p]: { pago: false, comps: (g.pag[p] && g.pag[p].comps) || [] } };
+    Store.gastos.set(g.id, { ...g, pag });
+  }
+
+  // ---------- janelas ----------
+  function abrir(html, ligar) {
+    const d = dlg(); d.innerHTML = html;
+    d.querySelectorAll('[data-fechar]').forEach(b => b.onclick = () => d.close());
+    ligar && ligar(d); d.showModal();
+  }
+
+  function verComp(c, voltar) {
+    abrir(`<h3>${U.esc(c.nome)}</h3><form method="dialog" style="padding:12px">
+      ${c.tipo === 'img' ? `<img class="grande" src="${c.dataUrl}">` : `<object data="${c.dataUrl}" type="application/pdf" style="width:100%;height:60vh"><a href="${c.dataUrl}" download="${U.esc(c.nome)}">Baixar PDF</a></object>`}
+      <div class="acoes"><button type="button" class="btn sec" id="c-del">🗑 Excluir</button><button type="button" class="btn" id="c-volta">Voltar</button></div></form>`, d => {
+      d.querySelector('#c-volta').onclick = () => voltar();
+      d.querySelector('#c-del').onclick = () => { if (confirm('Excluir comprovante?')) { Store.comprovantes.del(c.id); voltar(); } };
+    });
+  }
+
+  async function detalhe(id) {
+    const g = typeof id === 'string' ? gastoPorId(id) : id; if (!g) return;
+    const e = await App.pedirEu();
+    const comps = pessoa => ((g.pag && g.pag[pessoa] && g.pag[pessoa].comps) || []).map(i => Store.comprovantes.lista().find(c => c.id === i)).filter(Boolean);
+    const linha = p => {
+      const parte = U.parteDe(g, p), pago = g.pag[p] && g.pag[p].pago, pend = U.pendente(g, p);
+      const cs = comps(p).map(c => `<button type="button" class="btn sec mini-b" data-c="${c.id}">📎 ${U.esc(c.nome.slice(0, 18))}</button>`).join(' ');
+      return `<tr><td><b>${U.esc(n(p))}</b>${g.adiantou === p ? ' <span class="chip ambos">adiantou</span>' : ''}</td><td class="v">${U.brl(parte)}</td>
+        <td>${parte === 0 ? '—' : pend ? '<span class="chip ambos">⏳ pendente</span>' : `<span class="chip ok">✔ pago${g.pag[p].data ? ' ' + U.dataBR(g.pag[p].data).slice(0, 5) : ''}</span>`} ${cs}</td>
+        <td>${pend ? `<button type="button" class="btn ${p === e ? '' : 'sec'} mini-b" data-p="${p}">${p === e ? 'Pagar minha parte' : 'Marcar como pago'}</button>` : pago && parte > 0 ? `<button type="button" class="mini" data-d="${p}" title="Desfazer">↩</button>` : ''}</td></tr>`;
+    };
+    abrir(`<h3>${U.esc(g.descricao)}</h3><div style="padding:12px 16px 16px;display:grid;gap:10px">
+      <p class="sub" style="margin:0">${U.dataBR(g.data)} · ${nomeForma(g.forma)} · ${U.esc(g.categoria)} · dividido ${rotuloDiv(g)}</p>
+      <div class="cards" style="margin:0"><div class="card"><small>Total</small><strong>${U.brl(g.valor)}</strong></div></div>
+      ${g.pag ? `<table><thead><tr><th>Quem</th><th class="v">Parte</th><th>Situação</th><th></th></tr></thead><tbody>${linha('A')}${linha('B')}</tbody></table>`
+        : '<p class="sub">Este gasto foi lançado antes do controle de pagamento das partes.</p>'}
+      <div class="acoes">${App.editarGasto ? '<button type="button" class="btn sec" id="d-edit">Editar</button>' : ''}<button type="button" class="btn" data-fechar>Fechar</button></div></div>`, d => {
+      const ed = d.querySelector('#d-edit'); if (ed) ed.onclick = () => { d.close(); App.editarGasto(g.id); };
+      d.querySelectorAll('[data-c]').forEach(b => b.onclick = () => verComp(Store.comprovantes.lista().find(c => c.id === b.dataset.c), () => detalhe(g.id)));
+      d.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { d.close(); pagarParte(g, null, b.dataset.p); });
+      d.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { marcarPendente(g, b.dataset.d); d.close(); detalhe(g.id); });
+    });
+  }
+
+  // lista de pendências de quem sou eu; usada também ao receber um comprovante compartilhado
+  async function pendencias(arquivo) {
+    const e = await App.pedirEu(); if (!e) return;
+    const minhas = Store.gastos.lista().filter(g => U.pendente(g, e)).sort((a, b) => b.data.localeCompare(a.data));
+    abrir(`<h3>Pagar minha parte</h3><div style="padding:12px 16px 16px;display:grid;gap:8px">
+      ${arquivo ? `<p class="sub" style="margin:0">Comprovante recebido: <b>${U.esc(arquivo.name)}</b>. Escolha qual gasto ele paga.</p>` : ''}
+      ${minhas.length ? minhas.map(g => `<div class="pend"><div><b>${U.esc(g.descricao)}</b><br><span class="sub">${U.dataBR(g.data)} · sua parte ${U.brl(U.parteDe(g, e))}</span></div>
+        <button type="button" class="btn mini-b" data-g="${g.id}">Pagar</button></div>`).join('') : '<div class="vazio">Você não tem nada pendente 💜</div>'}
+      <div class="acoes">${arquivo ? '<button type="button" class="btn sec" id="p-novo">Criar novo gasto com este comprovante</button>' : ''}<button type="button" class="btn" data-fechar>Fechar</button></div></div>`, d => {
+      d.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { d.close(); pagarParte(gastoPorId(b.dataset.g), arquivo, e); });
+      const pn = d.querySelector('#p-novo'); if (pn) pn.onclick = () => { d.close(); novoGasto({ arquivo }); };
+    });
+  }
+
+  // ---------- compartilhar do app do banco (Android, app instalado) ----------
+  async function receberCompartilhado() {
+    if (!location.search.includes('compartilhado') || !window.caches) return;
+    history.replaceState(null, '', location.pathname + location.hash);
+    const cache = await caches.open('nc-share'), r = await cache.match('arquivo');
+    if (!r) return;
+    const blob = await r.blob(); await cache.delete('arquivo');
+    const nome = decodeURIComponent(r.headers.get('X-Nome') || 'comprovante');
+    const arquivo = new File([blob], nome, { type: blob.type });
+    abrir(`<h3>Comprovante recebido 📎</h3><div style="padding:12px 16px 16px;display:grid;gap:10px">
+      <p class="sub" style="margin:0"><b>${U.esc(nome)}</b>. O que você quer fazer com ele?</p>
+      <button type="button" class="btn" id="r-pagar">✅ Pagar minha parte de um gasto</button>
+      <button type="button" class="btn sec" id="r-novo">➕ Criar novo gasto com este comprovante</button>
+      <button type="button" class="btn sec" data-fechar>Agora não</button></div>`, d => {
+      d.querySelector('#r-pagar').onclick = () => { d.close(); pendencias(arquivo); };
+      d.querySelector('#r-novo').onclick = () => { d.close(); novoGasto({ arquivo }); };
+    });
+  }
+
+  // ---------- aba "Lançar" ----------
+  function acao(sub) { if (sub === 'novo') novoGasto(); else if (sub === 'pagar') pendencias(); }
+
+  App.registrar('lancar', async el => {
+    const e = App.eu(), gastos = Store.gastos.lista();
+    const minhas = e ? gastos.filter(g => U.pendente(g, e)) : [];
+    const totalMinhas = minhas.reduce((s, g) => s + U.parteDe(g, e), 0);
+    const ac = U.saldoAcertos(gastos), liquido = ac.A - ac.B;
+    const frase = liquido === 0 ? (gastos.some(g => g.pag) ? 'Vocês estão quites 💜' : '') : `${n(liquido > 0 ? 'A' : 'B')} deve ${U.brl(Math.abs(liquido))} para ${n(liquido > 0 ? 'B' : 'A')}`;
+    const recentes = gastos.slice().sort((a, b) => (b.data + b.id).localeCompare(a.data + a.id)).slice(0, 6);
+    el.innerHTML = `
+      <div class="tiles">
+        <button class="tile" id="t-novo"><i>➕</i><b>Novo gasto</b><span>O que foi, como foi pago e como dividir.</span></button>
+        <button class="tile" id="t-pagar"><i>✅</i><b>Pagar minha parte</b><span>${e ? (minhas.length ? `${minhas.length} pendente(s) · ${U.brl(totalMinhas)}` : 'Nada pendente') : 'Escolha quem você é'}</span></button>
+      </div>
+      ${frase ? `<div class="acerto">${U.esc(frase)}</div>` : ''}
+      ${e ? `<p class="sub">Você está usando como <b>${U.esc(n(e))}</b>. <a href="#" id="trocar-eu">Não sou eu</a></p>` : ''}
+      <h2 class="titulo-sec">Últimos lançamentos</h2>
+      ${recentes.length ? recentes.map(g => `<div class="pend" data-g="${g.id}" role="button" tabindex="0">
+        <div><b>${U.esc(g.descricao)}</b><br><span class="sub">${U.dataBR(g.data)} · ${nomeForma(g.forma)} · ${rotuloDiv(g)}</span></div>
+        <div style="text-align:right"><b>${U.brl(g.valor)}</b><br>${g.pag ? ['A', 'B'].filter(p => U.parteDe(g, p) > 0).map(p => `<span class="chip ${U.pendente(g, p) ? 'ambos' : 'ok'}">${U.pendente(g, p) ? '⏳' : '✔'} ${U.esc(n(p))}</span>`).join(' ') : ''}</div></div>`).join('')
+        : '<div class="vazio">Nenhum gasto ainda. Toque em <b>Novo gasto</b> 💜</div>'}
+      ${document.body.classList.contains('solo') ? '' : '<p class="sub" style="margin-top:14px">📱 No celular, use a <a href="formulario.html" style="color:var(--realce)">página só do formulário</a>: dá para instalar como app e receber comprovantes do banco.</p>'}`;
+    App.$('#t-novo').onclick = () => novoGasto();
+    App.$('#t-pagar').onclick = () => pendencias();
+    const t = App.$('#trocar-eu'); if (t) t.onclick = ev => { ev.preventDefault(); try { localStorage.removeItem('nc-eu-' + (App.estado.uid || 'local')); } catch {} App.pedirEu().then(() => App.mostrarAtual()); };
+    el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => detalhe(b.dataset.g));
+    const sub = location.hash.split('/')[1];
+    if (sub) { history.replaceState(null, '', '#lancar'); setTimeout(() => acao(sub), 0); }
+  }, () => ({ crumb: 'Financeiro › Lançar', titulo: 'Lançar', sub: 'Registre um gasto ou pague a sua parte e anexe o comprovante.', cta: null }));
+
+  App.novoGasto = novoGasto; App.detalheGasto = detalhe; App.pendencias = pendencias;
+
+  return {
+    aoIniciar() {
+      (async () => { await App.pedirEu(); App.mostrarAtual(); await receberCompartilhado(); })().catch(console.error);
+    }
+  };
+})();

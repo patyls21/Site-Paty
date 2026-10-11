@@ -1,0 +1,26 @@
+{
+  "id": "nosso-controle-formulario",
+  "name": "Lançar gasto · Nosso Controle",
+  "short_name": "Lançar gasto",
+  "description": "Lance um gasto ou pague a sua parte e anexe o comprovante.",
+  "start_url": "./formulario.html",
+  "scope": "./formulario.html",
+  "display": "standalone",
+  "background_color": "#22012a",
+  "theme_color": "#22012a",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Novo gasto", "short_name": "Novo gasto", "url": "./formulario.html#lancar/novo", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Pagar minha parte", "short_name": "Pagar parte", "url": "./formulario.html#lancar/pagar", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "share_target": {
+    "action": "./formulario.html",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": { "files": [{ "name": "comprovante", "accept": ["image/*", "application/pdf"] }] }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "nosso-controle-painel",
+  "name": "Nosso Controle Financeiro",
+  "short_name": "Nosso Controle",
+  "description": "Painel de gastos do casal, cartão Inter, comprovantes e pontos Loop.",
+  "start_url": "./index.html",
+  "scope": "./index.html",
+  "display": "standalone",
+  "background_color": "#22012a",
+  "theme_color": "#22012a",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

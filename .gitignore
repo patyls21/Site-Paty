@@ -1,0 +1,5 @@
+﻿# backups com dados pessoais nunca vão para o GitHub
+backup-financeiro-*.json
+*.backup.json
+.claude/
+
