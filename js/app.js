@@ -84,10 +84,13 @@ const App = (() => {
     const box = $('#login'), f = $('#login-form'), erro = $('#login-erro'), espera = $('#espera');
     let { data: { session } } = await sb.auth.getSession();
     // sempre a linha DESTE usuário: administradores enxergam todas as linhas da tabela, então filtrar por id é obrigatório
+    let diag = ''; // explica na tela de espera o que o site encontrou
     const perfil = async () => {
       const uid = session && session.user && session.user.id;
-      if (!uid) return null;
-      return (await sb.from('usuarios').select('*').eq('id', uid).maybeSingle()).data;
+      if (!uid) { diag = 'sem login ativo'; return null; }
+      const r = await sb.from('usuarios').select('*').eq('id', uid).maybeSingle();
+      diag = `conta ${session.user.email || uid.slice(0, 8)}: ` + (r.error ? 'erro ao ler: ' + r.error.message : r.data ? (r.data.aprovado ? 'liberada' : 'ainda NÃO liberada') : 'não existe na lista de usuários (entre de novo com a conta certa)');
+      return r.data;
     };
     if (!session) {
       box.hidden = false;
@@ -116,12 +119,13 @@ const App = (() => {
     let eu = await perfil();
     if (!eu || !eu.aprovado) {
       box.hidden = false; f.hidden = true; espera.hidden = false;
+      $('#espera-erro').textContent = diag;
       await new Promise(ok => {
         $('#espera-sair').onclick = async () => { await sb.auth.signOut(); location.reload(); };
         $('#espera-ver').onclick = async () => {
           eu = await perfil();
           if (eu && eu.aprovado) { espera.hidden = true; box.hidden = true; ok(); }
-          else $('#espera-erro').textContent = 'Ainda não foi liberado.';
+          else $('#espera-erro').textContent = 'Ainda não foi liberado. ' + diag;
         };
       });
     }
