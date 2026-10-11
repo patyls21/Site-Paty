@@ -4,7 +4,7 @@ const Store = (() => {
   const KEY = 'nosso-controle-v1';
   const COLS = ['gastos', 'inter', 'acertos', 'comprovantes', 'fixos', 'futuros', 'pontos', 'viagens', 'pix'];
   const padrao = () => ({
-    config: { nomeA: 'Patrícia', nomeB: 'Namorado', acrescimoFuturo: 0, reaisPorPonto: 2.5, conversao: 1, bonus: 100 },
+    config: { nomeA: 'Patrícia', nomeB: 'Namorado', acrescimoFuturo: 0, reaisPorPonto: 2.5, conversao: 1, bonus: 100, diaFechamento: 16 },
     categorias: ['iFood', 'Streaming', 'Duo Gourmet', 'Render (guardado)', 'Mercado', 'Transporte', 'Lazer', 'Casa', 'Saúde', 'Compras', 'Contas', 'Outros'],
     gastos: [], inter: [], faturas: {}, acertos: [], comprovantes: [], fixos: [], futuros: [], pontos: [], viagens: [], pix: []
   });
@@ -92,12 +92,13 @@ const Store = (() => {
     gastos: col('gastos'), inter: col('inter'), acertos: col('acertos'), comprovantes: col('comprovantes'),
     fixos: col('fixos'), futuros: col('futuros'), pontos: col('pontos'), viagens: col('viagens'), pix: col('pix'),
     // lançamentos da fatura do Inter: os criados na aba Inter + gastos do Painel de Compras pagos com "Cartão Inter"
+    // a fatura é definida pela DATA da compra e pelo dia de fechamento (config.diaFechamento), não pelo mês do calendário
     lancInter(mes) {
-      const doPainel = d.gastos.filter(g => g.mes === mes && g.forma === 'inter').map(g => ({
+      const doPainel = d.gastos.filter(g => g.forma === 'inter' && U.mesFatura(g.data) === mes).map(g => ({
         id: g.id, data: g.data, descricao: g.descricao, categoria: g.categoria, valor: g.valor,
         divisao: g.pessoa === 'ambos' ? 'meio' : g.pessoa, parteA: 0, mes, origem: 'compras', fixo: !!g.fixoId
       }));
-      return d.inter.filter(l => l.mes === mes).concat(doPainel);
+      return d.inter.filter(l => U.mesFatura(l.data) === mes).map(l => ({ ...l, mes })).concat(doPainel);
     },
     fatura: mes => d.faturas[mes] || { mes, status: 'aberta', pagaPor: 'A' },
     setFatura(mes, f) { d.faturas[mes] = { ...Store.fatura(mes), ...f, mes }; enviar('faturas', mes, d.faturas[mes]); avisar(); },

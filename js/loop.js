@@ -3,13 +3,13 @@
   // pontos automáticos de um mês = total da fatura do Inter / reais por ponto (arredondado para baixo)
   const totalFatura = m => Store.lancInter(m).reduce((s, l) => s + l.valor, 0);
   const autoPontos = m => { const r = Store.config.reaisPorPonto || 2.5; return Math.floor(totalFatura(m) / 100 / r); };
-  // mês "fechado" = anterior ao atual ou fatura marcada como paga; o atual aberto fica como "a cair"
-  const fechado = m => m < U.mesAtual() || Store.fatura(m).status === 'paga';
+  // fatura "fechada" = já passou o dia de fechamento daquele mês ou foi marcada como paga; as abertas ficam como "a cair"
+  const fechado = m => U.hoje() >= `${m}-${String(U.diaFecha()).padStart(2, '0')}` || Store.fatura(m).status === 'paga';
 
   function mesesComDados() {
     const s = new Set([U.mesAtual()]);
-    Store.gastos.lista().forEach(g => g.forma === 'inter' && s.add(g.mes));
-    Store.inter.lista().forEach(l => s.add(l.mes));
+    Store.gastos.lista().forEach(g => g.forma === 'inter' && s.add(U.mesFatura(g.data)));
+    Store.inter.lista().forEach(l => s.add(U.mesFatura(l.data)));
     Store.pontos.lista().forEach(p => s.add(p.mes));
     return [...s].filter(m => m <= U.mesAtual() || totalFatura(m) > 0).sort().reverse();
   }
@@ -61,7 +61,7 @@
     el.innerHTML = `
       <div class="cards">
         <div class="card"><small>Saldo de pontos Loop</small><strong>${fmt(confirmado)}</strong></div>
-        <div class="card a"><small>A cair neste mês</small><strong>+${fmt(aCair)}</strong></div>
+        <div class="card a"><small>A cair (fatura aberta)</small><strong>+${fmt(aCair)}</strong></div>
         <div class="card b"><small>Média mensal (${base.length ? 'últimos ' + base.length + ' meses' : 'mês atual'})</small><strong>${fmt(media)}</strong></div>
         <div class="card ok"><small>Saldo em milhas (com promo)</small><strong>${fmt(confirmado * mult)}</strong></div>
       </div>
@@ -77,7 +77,7 @@
         <table><thead><tr><th>Mês</th><th class="v">Fatura</th><th class="v">Pontos</th><th class="v">Extras</th><th>Situação</th></tr></thead><tbody>${linhas.map(l => `
           <tr><td>${U.mesNome(l.m)}</td><td class="v">${U.brl(l.gasto)}</td><td class="v">+${fmt(l.auto)}</td><td class="v">${l.ext ? '+' + fmt(l.ext) : '—'}</td>
           <td><span class="chip ${l.fech ? 'ok' : 'ambos'}">${l.fech ? 'Creditado' : 'A cair'}</span></td></tr>`).join('')}</tbody></table>
-        <p class="sub" style="margin-top:8px">O mês vira "Creditado" quando passa, ou quando você marca a fatura como paga na aba Inter. Arredondado para baixo, por fatura.</p>
+        <p class="sub" style="margin-top:8px">A fatura vira "Creditado" depois do dia de fechamento (dia ${U.diaFecha()}) ou quando você a marca como paga na aba Inter. Os pontos são arredondados para baixo, por fatura.</p>
       </section>
       <section class="bloco"><h2>✈ Metas de viagem</h2>
         ${vs.length ? `<table><thead><tr><th>Viagem</th><th class="v">Milhas</th><th class="v">Pontos necessários</th><th class="v">Faltam</th><th>Previsão</th><th></th></tr></thead><tbody>${vs.map(v => {

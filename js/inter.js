@@ -21,8 +21,8 @@
         parteA = U.parseValor(f.parteA);
         if (!(parteA >= 0 && parteA <= valor)) { alert('Parte inválida (entre 0 e o valor total).'); return false; }
       }
-      // mes = mês da fatura; compra após o dia 1 fica na fatura do mês da data (ajuste aqui se o fechamento for diferente)
-      const o = { data: f.data, descricao: f.descricao, categoria: f.categoria, valor, divisao: f.divisao, parteA, mes: App.estado.mes };
+      // mes = fatura à qual a compra pertence, pela data e pelo dia de fechamento
+      const o = { data: f.data, descricao: f.descricao, categoria: f.categoria, valor, divisao: f.divisao, parteA, mes: U.mesFatura(f.data) };
       l ? Store.inter.set(l.id, o) : Store.inter.add(o);
     });
   }
@@ -71,6 +71,7 @@
     const nome = App.nome;
     const frase = !ls.length ? 'Sem lançamentos neste mês.' : d.restante === 0 ? 'Tudo acertado 💜' : `${nome(d.devedor)} deve ${U.brl(d.restante)} para ${nome(d.pagou)}`;
     el.innerHTML = `<div class="mes" id="nav"></div>
+      <p class="sub" style="text-align:center;margin:-6px 0 14px">Fatura que fecha dia ${U.diaFecha()}: compras de <b>${U.periodoFatura(m)}</b></p>
       <div class="cards">
         <div class="card"><small>Total da fatura</small><strong>${U.brl(d.total)}</strong></div>
         <div class="card a"><small>Parte de ${U.esc(nome('A'))}</small><strong>${U.brl(d.devA)}</strong></div>

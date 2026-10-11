@@ -68,7 +68,7 @@
       <div class="card a"><small>Parte de ${U.esc(App.nome('A'))}</small><strong>${U.brl(parteDe(gastos, 0))}</strong></div>
       <div class="card b"><small>Parte de ${U.esc(App.nome('B'))}</small><strong>${U.brl(parteDe(gastos, 1))}</strong></div>
       <div class="card ok"><small>Guardado p/ render</small><strong>${U.brl(guardado)}</strong></div>
-      <div class="card"><small>Fatura do Inter</small><strong>${U.brl(inter)}</strong></div>`;
+      <div class="card"><small>Fatura do Inter · ${U.periodoFatura(m)}</small><strong>${U.brl(inter)}</strong></div>`;
     const cores = ['#9b5de5', '#f4c53d', '#5aaaff', '#3fbf8a', '#f5a623', '#d96ba0'];
     const outras = top.slice(5).reduce((s, x) => s + x[1], 0);
     const segsCat = top.slice(0, 5).map(([c, v], i) => ({ rotulo: c, valor: v, cor: cores[i] }));

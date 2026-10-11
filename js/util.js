@@ -14,6 +14,18 @@ const U = {
   mesDe: iso => iso.slice(0, 7),
   mesAtual() { return U.hoje().slice(0, 7); },
   mesSoma(m, n) { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; },
+  // ---- fatura do Inter: fecha todo dia X (padrão 16); compras a partir do dia X caem na fatura do mês seguinte ----
+  diaFecha: () => Math.min(28, Math.max(1, Math.round(Number(Store.config.diaFechamento)) || 16)),
+  mesFatura(dataISO) {
+    const mes = dataISO.slice(0, 7);
+    return Number(dataISO.slice(8, 10)) >= U.diaFecha() ? U.mesSoma(mes, 1) : mes;
+  },
+  // período coberto pela fatura "de um mês" (ex.: "16/09 a 15/10")
+  periodoFatura(mes) {
+    const [y, m] = mes.split('-').map(Number), d = U.diaFecha();
+    const f = dt => String(dt.getDate()).padStart(2, '0') + '/' + String(dt.getMonth() + 1).padStart(2, '0');
+    return `${f(new Date(y, m - 2, d))} a ${f(new Date(y, m - 1, d - 1))}`;
+  },
   mesNome(m) { const [y, mo] = m.split('-').map(Number); const t = new Date(y, mo - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); return t[0].toUpperCase() + t.slice(1); },
   dataBR: iso => iso.split('-').reverse().join('/'),
   // reduz imagem no navegador (máx 1280px, JPEG 0.7); PDF fica como está (limite 700 KB)
