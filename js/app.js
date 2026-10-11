@@ -82,8 +82,13 @@ const App = (() => {
   // login (Supabase Auth) + carga dos dados da nuvem
   async function entrarNaNuvem(sb) {
     const box = $('#login'), f = $('#login-form'), erro = $('#login-erro'), espera = $('#espera');
-    const perfil = async () => (await sb.from('usuarios').select('*').maybeSingle()).data;
     let { data: { session } } = await sb.auth.getSession();
+    // sempre a linha DESTE usuário: administradores enxergam todas as linhas da tabela, então filtrar por id é obrigatório
+    const perfil = async () => {
+      const uid = session && session.user && session.user.id;
+      if (!uid) return null;
+      return (await sb.from('usuarios').select('*').eq('id', uid).maybeSingle()).data;
+    };
     if (!session) {
       box.hidden = false;
       let modo = 'entrar';
