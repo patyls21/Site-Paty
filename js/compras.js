@@ -87,9 +87,10 @@
     App.$('#lista').innerHTML = vis.length ? `<table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Dividido</th><th>Pagamento</th><th>Partes</th><th class="v">Valor</th><th></th></tr></thead><tbody>${vis.map(g => `
       <tr><td>${U.dataBR(g.data)}</td><td>${U.esc(g.descricao)}${g.fixoId ? ' 🔁' : ''}</td><td><span class="chip">${U.esc(g.categoria)}</span></td>
       <td><span class="chip ${div(g) === 'B' ? 'b' : div(g) === 'meio' ? 'ambos' : ''}">${U.esc(rotuloPessoa(g))}</span></td><td>${nomeForma(g.forma)}</td><td>${partesChips(g)}</td>
-      <td class="v">${U.brl(g.valor)}</td><td><button class="mini" data-d="${g.id}" aria-label="Detalhes e pagamento" title="Detalhes e pagamento">🔎</button><button class="mini" data-e="${g.id}" aria-label="Editar">✏️</button><button class="mini" data-x="${g.id}" aria-label="Excluir">🗑</button></td></tr>`).join('')}</tbody></table>`
+      <td class="v">${U.brl(g.valor)}</td><td>${App.temComprovante(g) ? `<button class="mini" data-v="${g.id}" aria-label="Ver comprovante" title="Ver comprovante">👁</button>` : ''}<button class="mini" data-d="${g.id}" aria-label="Detalhes e pagamento" title="Detalhes e pagamento">🔎</button><button class="mini" data-e="${g.id}" aria-label="Editar">✏️</button><button class="mini" data-x="${g.id}" aria-label="Excluir">🗑</button></td></tr>`).join('')}</tbody></table>`
       : `<div class="vazio">Nenhum gasto neste mês. Use o botão amarelo ou a aba <b>Lançar</b> 💜</div>`;
     App.$('#lista').querySelectorAll('[data-d]').forEach(b => b.onclick = () => App.detalheGasto(b.dataset.d));
+    App.$('#lista').querySelectorAll('[data-v]').forEach(b => b.onclick = () => App.verComprovantes(b.dataset.v));
     App.$('#lista').querySelectorAll('[data-e]').forEach(b => b.onclick = () => editar(Store.gastos.lista().find(g => g.id === b.dataset.e)));
     App.$('#lista').querySelectorAll('[data-x]').forEach(b => b.onclick = () => { if (confirm('Excluir este gasto?')) Store.gastos.del(b.dataset.x); });
   }

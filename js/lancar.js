@@ -83,13 +83,44 @@ const Lancar = (() => {
     ligar && ligar(d); d.showModal();
   }
 
-  function verComp(c, voltar) {
-    abrir(`<h3>${U.esc(c.nome)}</h3><form method="dialog" style="padding:12px">
-      ${c.tipo === 'img' ? `<img class="grande" src="${c.dataUrl}">` : `<object data="${c.dataUrl}" type="application/pdf" style="width:100%;height:60vh"><a href="${c.dataUrl}" download="${U.esc(c.nome)}">Baixar PDF</a></object>`}
-      <div class="acoes"><button type="button" class="btn sec" id="c-del">🗑 Excluir</button><button type="button" class="btn" id="c-volta">Voltar</button></div></form>`, d => {
-      d.querySelector('#c-volta').onclick = () => voltar();
-      d.querySelector('#c-del').onclick = () => { if (confirm('Excluir comprovante?')) { Store.comprovantes.del(c.id); voltar(); } };
+  // todos os comprovantes ligados a um gasto (de qualquer pessoa)
+  function compsDoGasto(g) {
+    const ids = new Set();
+    ['A', 'B'].forEach(p => ((g.pag && g.pag[p] && g.pag[p].comps) || []).forEach(i => ids.add(i)));
+    Store.comprovantes.lista().forEach(c => { if (c.gastoId === g.id) ids.add(c.id); });
+    return [...ids].map(i => Store.comprovantes.lista().find(c => c.id === i)).filter(Boolean);
+  }
+
+  // visualizador: imagem ou PDF, com anterior/próximo (se houver mais de um), baixar e excluir
+  function verComps(lista, i, voltar, titulo) {
+    const c = lista[i];
+    abrir(`<h3>${U.esc(titulo)}${lista.length > 1 ? ` (${i + 1}/${lista.length})` : ''}</h3><form method="dialog" style="padding:12px;display:grid;gap:10px">
+      <p class="sub" style="margin:0">${c.pessoa ? U.esc(n(c.pessoa)) + ' · ' : ''}${U.esc(c.nome)}${c.enviadoEm ? ' · ' + U.dataBR(c.enviadoEm) : ''}</p>
+      ${c.tipo === 'img' ? `<img class="grande" src="${c.dataUrl}" alt="Comprovante">` : `<object data="${c.dataUrl}" type="application/pdf" style="width:100%;height:60vh"><p class="sub">Seu aparelho não mostra PDF aqui. Use o botão <b>Baixar</b>.</p></object>`}
+      <div class="acoes">
+        ${lista.length > 1 ? '<button type="button" class="btn sec mini-b" id="c-ant" aria-label="Anterior">‹</button><button type="button" class="btn sec mini-b" id="c-prox" aria-label="Próximo">›</button>' : ''}
+        <a class="btn-a" href="${c.dataUrl}" download="${U.esc(c.nome)}">⬇ Baixar</a>
+        <button type="button" class="btn sec mini-b" id="c-del" aria-label="Excluir">🗑</button>
+        <button type="button" class="btn mini-b" id="c-volta">${voltar ? 'Voltar' : 'Fechar'}</button></div></form>`, d => {
+      const ir = k => verComps(lista, (i + k + lista.length) % lista.length, voltar, titulo);
+      const a = d.querySelector('#c-ant'); if (a) { a.onclick = () => ir(-1); d.querySelector('#c-prox').onclick = () => ir(1); }
+      d.querySelector('#c-volta').onclick = () => voltar ? voltar() : d.close();
+      d.querySelector('#c-del').onclick = () => {
+        if (!confirm('Excluir comprovante?')) return;
+        Store.comprovantes.del(c.id);
+        const resto = lista.filter(x => x.id !== c.id);
+        if (resto.length) verComps(resto, Math.min(i, resto.length - 1), voltar, titulo); else if (voltar) voltar(); else d.close();
+      };
     });
+  }
+  function verComp(c, voltar) {
+    const g = gastoPorId(c.gastoId), lista = g ? compsDoGasto(g) : [c];
+    verComps(lista, Math.max(0, lista.findIndex(x => x.id === c.id)), voltar, g ? g.descricao : c.nome);
+  }
+  // o olhinho 👁: abre direto os comprovantes do gasto
+  function verComprovantes(id) {
+    const g = gastoPorId(id), lista = g ? compsDoGasto(g) : [];
+    if (lista.length) verComps(lista, 0, null, g.descricao);
   }
 
   async function detalhe(id) {
@@ -183,7 +214,7 @@ const Lancar = (() => {
       <h2 class="titulo-sec">Últimos lançamentos</h2>
       ${recentes.length ? recentes.map(g => `<div class="pend" data-g="${g.id}" role="button" tabindex="0">
         <div><b>${U.esc(g.descricao)}</b><br><span class="sub">${U.dataBR(g.data)} · ${nomeForma(g.forma)} · ${rotuloDiv(g)}</span></div>
-        <div style="text-align:right"><b>${U.brl(g.valor)}</b><br>${g.pag ? ['A', 'B'].filter(p => U.parteDe(g, p) > 0).map(p => `<span class="chip ${U.pendente(g, p) ? 'ambos' : 'ok'}">${U.pendente(g, p) ? '⏳' : '✔'} ${U.esc(n(p))}</span>`).join(' ') : ''}</div></div>`).join('')
+        <div style="text-align:right"><b>${U.brl(g.valor)}</b>${compsDoGasto(g).length ? ` <button type="button" class="olho" data-v="${g.id}" aria-label="Ver comprovante" title="Ver comprovante">👁</button>` : ''}<br>${g.pag ? ['A', 'B'].filter(p => U.parteDe(g, p) > 0).map(p => `<span class="chip ${U.pendente(g, p) ? 'ambos' : 'ok'}">${U.pendente(g, p) ? '⏳' : '✔'} ${U.esc(n(p))}</span>`).join(' ') : ''}</div></div>`).join('')
         : '<div class="vazio">Nenhum gasto ainda. Toque em <b>Novo gasto</b> 💜</div>'}
       ${document.body.classList.contains('solo') ? '' : '<p class="sub" style="margin-top:14px">📱 No celular, use a <a href="formulario.html" style="color:var(--realce)">página só do formulário</a>: dá para instalar como app e receber comprovantes do banco.</p>'}`;
     App.$('#t-novo').onclick = () => novoGasto();
@@ -191,11 +222,13 @@ const Lancar = (() => {
     App.$('#t-arq').onchange = ev => { const f = ev.target.files[0]; if (f) destinoComprovante(f); ev.target.value = ''; };
     const t = App.$('#trocar-eu'); if (t) t.onclick = ev => { ev.preventDefault(); try { localStorage.removeItem('nc-eu-' + (App.estado.uid || 'local')); } catch {} App.pedirEu().then(() => App.mostrarAtual()); };
     el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => detalhe(b.dataset.g));
+    el.querySelectorAll('[data-v]').forEach(b => b.onclick = ev => { ev.stopPropagation(); verComprovantes(b.dataset.v); });
     const sub = location.hash.split('/')[1];
     if (sub) { history.replaceState(null, '', '#lancar'); setTimeout(() => acao(sub), 0); }
   }, () => ({ crumb: 'Financeiro › Lançar', titulo: 'Lançar', sub: 'Registre um gasto ou pague a sua parte e anexe o comprovante.', cta: null }));
 
   App.novoGasto = novoGasto; App.detalheGasto = detalhe; App.pendencias = pendencias;
+  App.verComprovantes = verComprovantes; App.temComprovante = g => compsDoGasto(g).length > 0;
 
   return {
     aoIniciar() {
