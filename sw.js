@@ -7,13 +7,14 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method === 'POST' && url.pathname.endsWith('/formulario.html')) {
     e.respondWith((async () => {
-      const info = { campos: [], achou: false, erro: '' };
+      const info = { campos: [], achou: false, erro: '', tipo: e.request.headers.get('content-type') || '', bytes: -1 };
       try {
+        try { info.bytes = (await e.request.clone().arrayBuffer()).byteLength; } catch (_) {}
         const fd = await e.request.formData();
         let arquivo = null;
         for (const [campo, v] of fd.entries()) {
           const ehArquivo = typeof v !== 'string';
-          info.campos.push(campo + ':' + (ehArquivo ? `arquivo(${v.type || '?'},${v.size})` : 'texto'));
+          info.campos.push(campo + ':' + (ehArquivo ? `arquivo(${v.type || '?'},${v.size})` : 'texto(' + String(v).slice(0, 60) + ')'));
           if (ehArquivo && v.size && !arquivo) arquivo = v; // pega o primeiro arquivo, qualquer que seja o nome do campo
         }
         const cache = await caches.open('nc-share');

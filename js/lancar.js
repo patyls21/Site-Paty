@@ -139,7 +139,7 @@ const Lancar = (() => {
       const ri = await cache.match('info'); let info = null; try { info = ri && await ri.json(); } catch {}
       abrir(`<h3>Não recebi o comprovante</h3><div style="padding:12px 16px 16px;display:grid;gap:10px">
         <p class="sub" style="margin:0">O app abriu pelo Compartilhar, mas nenhum arquivo chegou. Você pode anexar pelo botão <b>Novo gasto</b> ou <b>Pagar minha parte</b>, escolhendo a foto ou o PDF.</p>
-        <p class="sub" style="margin:0;font-size:.75rem">Detalhe técnico: ${U.esc(info ? (info.erro ? 'erro: ' + info.erro : info.campos.length ? 'recebido: ' + info.campos.join(', ') : 'nada recebido') : 'o compartilhamento não passou pelo app instalado (reinstale o app)')}</p>
+        <p class="sub" style="margin:0;font-size:.75rem">Detalhe técnico: ${U.esc(info ? (info.erro ? 'erro: ' + info.erro : info.campos.length ? 'recebido: ' + info.campos.join(', ') : 'nada recebido') + (info.bytes >= 0 ? ` · corpo ${info.bytes} bytes` : '') + (info.tipo ? ` · ${info.tipo.split(';')[0]}` : '') : 'o compartilhamento não passou pelo app instalado (reinstale o app)')}</p>
         <div class="acoes"><button type="button" class="btn" data-fechar>Entendi</button></div></div>`);
       return;
     }

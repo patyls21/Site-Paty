@@ -21,6 +21,6 @@
     "action": "./formulario.html",
     "method": "POST",
     "enctype": "multipart/form-data",
-    "params": { "files": [{ "name": "comprovante", "accept": ["image/*", "application/pdf"] }] }
+    "params": { "title": "titulo", "text": "texto", "url": "link", "files": [{ "name": "comprovante", "accept": ["image/*", "application/pdf"] }] }
   }
 }
