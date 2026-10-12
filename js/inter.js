@@ -27,18 +27,6 @@
     });
   }
 
-  function acerto() {
-    const m = App.estado.mes, d = U.calcularDivisao(Store.inter.lista().filter(l => l.mes === m), Store.fatura(m), Store.acertos.lista().filter(a => a.mes === m));
-    App.form('Registrar repasse', [
-      { k: 'data', rotulo: 'Data', tipo: 'date', req: true },
-      { k: 'valor', rotulo: 'Valor repassado (R$)', inputmode: 'decimal', req: true }
-    ], { data: U.hoje(), valor: U.valorInput(d.restante) }, f => {
-      const valor = U.parseValor(f.valor);
-      if (!(valor > 0)) { alert('Valor inválido.'); return false; }
-      Store.acertos.add({ mes: m, de: d.devedor, para: d.pagou, valor, data: f.data });
-    });
-  }
-
   function faturaForm() {
     const m = App.estado.mes, f = Store.fatura(m);
     App.form('Fatura de ' + U.mesNome(m), [
@@ -66,10 +54,13 @@
 
   App.registrar('inter', el => {
     const m = App.estado.mes, ls = Store.lancInter(m).sort((a, b) => b.data.localeCompare(a.data));
-    const fat = Store.fatura(m), ac = Store.acertos.lista().filter(a => a.mes === m);
-    const d = U.calcularDivisao(ls, fat, ac), cs = Store.comprovantes.lista().filter(c => c.mes === m && !c.gastoId);
+    const fat = Store.fatura(m);
+    const d = U.calcularDivisao(ls, fat, []), cs = Store.comprovantes.lista().filter(c => c.mes === m && !c.gastoId);
     const nome = App.nome;
-    const frase = !ls.length ? 'Sem lançamentos neste mês.' : d.restante === 0 ? 'Tudo acertado 💜' : `${nome(d.devedor)} deve ${U.brl(d.restante)} para ${nome(d.pagou)}`;
+    // quanto falta cada um pagar: só as partes ainda pendentes (as pagas com "Pagar minha parte" saem da conta)
+    const P = U.pendencias(ls.filter(l => l.pag)), falta = k => P[k].total, semControle = ls.filter(l => !l.pag).length;
+    const frase = !ls.length ? 'Sem lançamentos neste fechamento.' : (!falta('A') && !falta('B')) ? 'Tudo pago 💜'
+      : ['A', 'B'].filter(k => falta(k) > 0).map(k => `${nome(k)} ainda falta pagar ${U.brl(falta(k))}`).join(' · ');
     el.innerHTML = `<div class="mes" id="nav"></div>
       <p class="sub" style="text-align:center;margin:-6px 0 14px">Fatura que fecha dia ${U.diaFecha()}: compras de <b>${U.periodoFatura(m)}</b></p>
       <div class="cards">
@@ -77,28 +68,30 @@
         <div class="card a"><small>Parte de ${U.esc(nome('A'))}</small><strong>${U.brl(d.devA)}</strong></div>
         <div class="card b"><small>Parte de ${U.esc(nome('B'))}</small><strong>${U.brl(d.devB)}</strong></div>
         <div class="card"><small>Fatura</small><span class="selo ${fat.status}">${fat.status === 'paga' ? 'PAGA' : 'ABERTA'}</span>
-          <small style="margin-top:4px">${fat.pagaEm ? 'em ' + U.dataBR(fat.pagaEm) + ' · ' : ''}paga por ${U.esc(nome(fat.pagaPor))}</small></div>
+          <small style="margin-top:4px">${fat.pagaEm ? 'paga em ' + U.dataBR(fat.pagaEm) : ''}</small></div>
       </div>
-      <div class="acerto">${U.esc(frase)}</div>
-      <div class="filtros"><button class="btn" id="b-novo">+ Lançamento</button><button class="btn sec" id="b-fat">Marcar fatura / quem pagou</button>
-        ${ls.length && d.restante ? '<button class="btn ver" id="b-ac">Registrar repasse</button>' : ''}</div>
+      <div class="cards">
+        <div class="card a"><small>Falta pagar · ${U.esc(nome('A'))}</small><strong>${U.brl(falta('A'))}</strong></div>
+        <div class="card b"><small>Falta pagar · ${U.esc(nome('B'))}</small><strong>${U.brl(falta('B'))}</strong></div>
+      </div>
+      <div class="acerto">${U.esc(frase)}${semControle ? `<br><span class="sub" style="font-weight:500">${semControle} lançamento(s) antigo(s) não têm controle de pagamento e não entram nessa conta.</span>` : ''}</div>
+      <div class="filtros"><button class="btn" id="b-novo">+ Lançamento</button><button class="btn sec" id="b-pend">Ver / pagar pendências</button><button class="btn sec" id="b-fat">Marcar fatura como paga</button></div>
       ${ls.length ? `<table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Divisão</th><th class="v">Valor</th><th></th></tr></thead><tbody>${ls.map(l => `
         <tr><td>${U.dataBR(l.data)}</td><td>${U.esc(l.descricao)}${l.origem ? ` <span title="Veio do Painel de Compras${l.fixo ? ' (gasto fixo)' : ''}">${l.fixo ? '🔁' : '🛍'}</span>` : ''}</td><td><span class="chip">${U.esc(l.categoria)}</span></td><td>${U.esc(nomeDiv(l))}</td>
-        <td class="v">${U.brl(l.valor)}</td><td><button class="mini" data-e="${l.id}" data-o="${l.origem || ''}" aria-label="Editar">✏️</button><button class="mini" data-x="${l.id}" data-o="${l.origem || ''}" aria-label="Excluir">🗑</button></td></tr>`).join('')}</tbody></table>`
+        <td class="v">${U.brl(l.valor)}</td><td>${l.origem && l.pag && App.temComprovante(l) ? `<button class="mini" data-v="${l.id}" aria-label="Ver comprovante" title="Ver comprovante">👁</button>` : ''}<button class="mini" data-e="${l.id}" data-o="${l.origem || ''}" aria-label="Editar">✏️</button><button class="mini" data-x="${l.id}" data-o="${l.origem || ''}" aria-label="Excluir">🗑</button></td></tr>`).join('')}</tbody></table>`
         : '<div class="vazio">Nenhum lançamento neste mês.</div>'}
-      ${ac.length ? `<section class="bloco"><h2>Repasses</h2>${ac.map(a => `<p class="sub">${U.dataBR(a.data)} — ${U.esc(nome(a.de))} → ${U.esc(nome(a.para))}: <b>${U.brl(a.valor)}</b> <button class="mini" data-a="${a.id}" aria-label="Excluir repasse">🗑</button></p>`).join('')}</section>` : ''}
       <section class="bloco"><h2>Comprovantes de pagamento</h2>
         <div class="comps">${cs.map(c => `<div class="comp" data-c="${c.id}">${c.tipo === 'img' ? `<img src="${c.dataUrl}" alt="">` : '<div class="pdf">📄</div>'}${U.esc(c.nome)}</div>`).join('') || '<span class="sub">Nenhum comprovante ainda.</span>'}</div>
         <p><label class="btn" style="display:inline-flex;align-items:center">📎 Anexar comprovante<input id="arq" type="file" accept="image/*,application/pdf" multiple hidden></label></p>
       </section>`;
     App.navMes(App.$('#nav'), () => App.mostrarAtual());
-    App.$('#b-novo').onclick = () => editar(null);
+    App.$('#b-novo').onclick = () => App.novoGasto();
+    App.$('#b-pend').onclick = () => App.pendencias();
     App.$('#b-fat').onclick = faturaForm;
-    const bac = App.$('#b-ac'); if (bac) bac.onclick = acerto;
     el.querySelectorAll('[data-e]').forEach(b => b.onclick = () => b.dataset.o ? App.editarGasto(b.dataset.e) : editar(Store.inter.lista().find(l => l.id === b.dataset.e)));
     el.querySelectorAll('[data-x]').forEach(b => b.onclick = () => { if (confirm('Excluir lançamento?')) (b.dataset.o ? Store.gastos : Store.inter).del(b.dataset.x); });
-    el.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { if (confirm('Excluir repasse?')) Store.acertos.del(b.dataset.a); });
+    el.querySelectorAll('[data-v]').forEach(b => b.onclick = () => App.verComprovantes(b.dataset.v));
     el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => ver(Store.comprovantes.lista().find(c => c.id === b.dataset.c)));
     App.$('#arq').onchange = async e => { for (const f of e.target.files) await anexar(f); };
-  }, () => ({ crumb: 'Financeiro › Cartão Inter', titulo: 'Cartão Inter', sub: 'Fatura compartilhada, divisão entre vocês e comprovantes de pagamento.', cta: { rotulo: 'Novo lançamento', fn: () => editar(null) } }));
+  }, () => ({ crumb: 'Financeiro › Cartão Inter', titulo: 'Cartão Inter', sub: 'Fatura compartilhada, divisão entre vocês e comprovantes de pagamento.', cta: { rotulo: 'Novo lançamento', fn: () => App.novoGasto() } }));
 })();

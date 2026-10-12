@@ -8,12 +8,13 @@ const Lancar = (() => {
   const nomeForma = v => (FORMAS.find(f => f[0] === v) || [, v])[1];
   const rotuloDiv = g => g.pessoa === 'meio' || g.pessoa === 'ambos' ? 'meio a meio' : 'só ' + n(g.pessoa);
 
-  async function anexar(arquivo, g, pessoa) {
+  // gastoIds (opcional): um mesmo comprovante que vale para vários gastos (um Pix só pagando tudo)
+  async function anexar(arquivo, g, pessoa, gastoIds) {
     const file = arquivo instanceof File ? arquivo : new File([arquivo], arquivo.name || 'comprovante', { type: arquivo.type });
     const dataUrl = await U.anexo(file);
     return Store.comprovantes.add({
       mes: g.mes, nome: file.name || 'comprovante', tipo: dataUrl.startsWith('data:application/pdf') ? 'pdf' : 'img',
-      dataUrl, enviadoEm: U.hoje(), gastoId: g.id, pessoa
+      dataUrl, enviadoEm: U.hoje(), gastoId: g.id, pessoa, ...(gastoIds && gastoIds.length > 1 ? { gastoIds } : {})
     }).id;
   }
 
@@ -106,7 +107,7 @@ const Lancar = (() => {
       const a = d.querySelector('#c-ant'); if (a) { a.onclick = () => ir(-1); d.querySelector('#c-prox').onclick = () => ir(1); }
       d.querySelector('#c-volta').onclick = () => voltar ? voltar() : d.close();
       d.querySelector('#c-del').onclick = () => {
-        if (!confirm('Excluir comprovante?')) return;
+        if (!confirm(c.gastoIds && c.gastoIds.length > 1 ? `Este comprovante vale para ${c.gastoIds.length} gastos. Excluir de todos?` : 'Excluir comprovante?')) return;
         Store.comprovantes.del(c.id);
         const resto = lista.filter(x => x.id !== c.id);
         if (resto.length) verComps(resto, Math.min(i, resto.length - 1), voltar, titulo); else if (voltar) voltar(); else d.close();
@@ -167,16 +168,56 @@ const Lancar = (() => {
     });
   }
 
-  // lista de pendências de quem sou eu; usada também ao receber um comprovante compartilhado
+  // paga vários gastos de uma vez (ex.: um Pix só para a fatura): o mesmo comprovante fica em todos
+  function pagarGrupo(itens, p, titulo, arquivo) {
+    const total = itens.reduce((s, g) => s + U.parteDe(g, p), 0);
+    App.form(`${titulo}: ${U.brl(total)}`, [
+      { k: 'data', rotulo: 'Data do pagamento', tipo: 'date', req: true },
+      { k: 'comp', rotulo: 'Comprovante (imagem ou PDF)', tipo: 'file', accept: ACEITA, dica: arquivo ? `Comprovante recebido: ${arquivo.name}` : `Um comprovante só, vale para os ${itens.length} itens.` }
+    ], { data: U.hoje() }, async f => {
+      const arq = (f.comp && f.comp.size) ? f.comp : arquivo;
+      let compId = null;
+      if (arq) {
+        try { compId = await anexar(arq, itens[0], p, itens.map(g => g.id)); }
+        catch (err) { alert('Comprovante não anexado: ' + err.message); return false; }
+      }
+      itens.forEach(g => {
+        const gg = gastoPorId(g.id), pag = { ...gg.pag };
+        pag[p] = { ...(pag[p] || {}), pago: true, data: f.data, comps: [...((pag[p] && pag[p].comps) || []), ...(compId ? [compId] : [])] };
+        Store.gastos.set(gg.id, { ...gg, pag });
+      });
+      return true;
+    }, null, 'Confirmar pagamento');
+  }
+
+  const rotuloCredor = c => c === 'INTER' ? '💳 Fatura do Inter' : c === 'OUTRO' ? '📦 Outros (pagamento direto)' : `💸 Pix para ${n(c)}`;
+
+  // pendências dos dois, com total, agrupadas por para quem se paga; usada também ao receber um comprovante compartilhado
   async function pendencias(arquivo) {
     const e = await App.pedirEu(); if (!e) return;
-    const minhas = Store.gastos.lista().filter(g => U.pendente(g, e)).sort((a, b) => b.data.localeCompare(a.data));
-    abrir(`<h3>Pagar minha parte</h3><div style="padding:12px 16px 16px;display:grid;gap:8px">
-      ${arquivo ? `<p class="sub" style="margin:0">Comprovante recebido: <b>${U.esc(arquivo.name)}</b>. Escolha qual gasto ele paga.</p>` : ''}
-      ${minhas.length ? minhas.map(g => `<div class="pend"><div><b>${U.esc(g.descricao)}</b><br><span class="sub">${U.dataBR(g.data)} · sua parte ${U.brl(U.parteDe(g, e))}</span></div>
-        <button type="button" class="btn mini-b" data-g="${g.id}">Pagar</button></div>`).join('') : '<div class="vazio">Você não tem nada pendente 💜</div>'}
+    const o = App.outro(e), P = U.pendencias(Store.gastos.lista());
+    const credores = k => ['INTER', 'A', 'B', 'OUTRO'].filter(c => P[k].grupos[c]);
+    const bloco = k => credores(k).map(c => {
+      const gr = P[k].grupos[c];
+      const botao = k === e ? `<button type="button" class="btn mini-b" data-gp="${c}">Pagar tudo · ${U.brl(gr.total)}</button>`
+        : c === e ? `<button type="button" class="btn sec mini-b" data-gr="${c}">${U.esc(n(k))} pagou tudo</button>` : '';
+      return `<section class="grupo"><div class="grupo-cab"><div><b>${rotuloCredor(c)}</b><br><span class="sub">${gr.itens.length} item(ns) · ${U.brl(gr.total)}</span></div>${botao}</div>
+        ${gr.itens.slice().sort((a, b) => b.data.localeCompare(a.data)).map(g => `<div class="pend pend-lin"><div><b>${U.esc(g.descricao)}</b><br><span class="sub">${U.dataBR(g.data)} · parte ${U.brl(U.parteDe(g, k))}</span></div>
+          ${k === e ? `<button type="button" class="btn sec mini-b" data-g="${g.id}">Pagar só este</button>` : ''}</div>`).join('')}</section>`;
+    }).join('');
+    abrir(`<h3>Pendências</h3><div style="padding:12px 16px 16px;display:grid;gap:6px">
+      ${arquivo ? `<p class="sub" style="margin:0">Comprovante recebido: <b>${U.esc(arquivo.name)}</b>. Escolha o que ele paga.</p>` : ''}
+      <div class="cards" style="margin:0 0 4px">
+        <div class="card a"><small>Você deve</small><strong>${U.brl(P[e].total)}</strong></div>
+        <div class="card b"><small>${U.esc(n(o))} deve</small><strong>${U.brl(P[o].total)}</strong></div>
+      </div>
+      ${P[e].total || P[o].total ? '' : '<div class="vazio">Ninguém deve nada 💜</div>'}
+      ${P[e].total ? `<h4 class="sec-t">Você deve</h4>${bloco(e)}` : ''}
+      ${P[o].total ? `<h4 class="sec-t">${U.esc(n(o))} deve</h4>${bloco(o)}` : ''}
       <div class="acoes">${arquivo ? '<button type="button" class="btn sec" id="p-novo">Criar novo gasto com este comprovante</button>' : ''}<button type="button" class="btn" data-fechar>Fechar</button></div></div>`, d => {
       d.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { d.close(); pagarParte(gastoPorId(b.dataset.g), arquivo, e); });
+      d.querySelectorAll('[data-gp]').forEach(b => b.onclick = () => { d.close(); pagarGrupo(P[e].grupos[b.dataset.gp].itens, e, rotuloCredor(b.dataset.gp).replace(/^\S+\s/, ''), arquivo); });
+      d.querySelectorAll('[data-gr]').forEach(b => b.onclick = () => { d.close(); pagarGrupo(P[o].grupos[b.dataset.gr].itens, o, `${n(o)} pagou`, null); });
       const pn = d.querySelector('#p-novo'); if (pn) pn.onclick = () => { d.close(); novoGasto({ arquivo }); };
     });
   }
@@ -219,8 +260,9 @@ const Lancar = (() => {
     const e = App.eu(), gastos = Store.gastos.lista();
     const minhas = e ? gastos.filter(g => U.pendente(g, e)) : [];
     const totalMinhas = minhas.reduce((s, g) => s + U.parteDe(g, e), 0);
-    const ac = U.saldoAcertos(gastos), liquido = ac.A - ac.B;
-    const frase = liquido === 0 ? (gastos.some(g => g.pag) ? 'Vocês estão quites 💜' : '') : `${n(liquido > 0 ? 'A' : 'B')} deve ${U.brl(Math.abs(liquido))} para ${n(liquido > 0 ? 'B' : 'A')}`;
+    const P = U.pendencias(gastos);
+    const frase = (!P.A.total && !P.B.total) ? (gastos.some(g => g.pag) ? 'Tudo pago 💜' : '')
+      : ['A', 'B'].filter(k => P[k].total > 0).map(k => `${n(k)} deve ${U.brl(P[k].total)}`).join(' · ');
     const recentes = gastos.slice().sort((a, b) => (b.data + b.id).localeCompare(a.data + a.id)).slice(0, 6);
     el.innerHTML = `
       <div class="tiles">
@@ -229,7 +271,7 @@ const Lancar = (() => {
         <label class="tile tile-largo" id="t-comp"><i>📎</i><b>Tenho um comprovante</b><span>Escolha o print ou PDF na galeria e diga a que gasto ele pertence.</span>
           <input type="file" id="t-arq" accept="image/*,application/pdf" hidden></label>
       </div>
-      ${frase ? `<div class="acerto">${U.esc(frase)}</div>` : ''}
+      ${frase ? `<div class="acerto">${U.esc(frase)}${P.A.total || P.B.total ? '<br><button class="btn sec" id="b-pend2" style="margin-top:6px">Ver / pagar pendências</button>' : ''}</div>` : ''}
       ${e ? `<p class="sub">Você está usando como <b>${U.esc(n(e))}</b>. <a href="#" id="trocar-eu">Não sou eu</a></p>` : ''}
       <h2 class="titulo-sec">Últimos lançamentos</h2>
       ${recentes.length ? recentes.map(g => `<div class="pend" data-g="${g.id}" role="button" tabindex="0">
@@ -239,6 +281,7 @@ const Lancar = (() => {
       ${document.body.classList.contains('solo') ? '' : '<p class="sub" style="margin-top:14px">📱 No celular, use a <a href="formulario.html" style="color:var(--realce)">página só do formulário</a>: dá para instalar como app e receber comprovantes do banco.</p>'}`;
     App.$('#t-novo').onclick = () => novoGasto();
     App.$('#t-pagar').onclick = () => pendencias();
+    const bp2 = App.$('#b-pend2'); if (bp2) bp2.onclick = () => pendencias();
     App.$('#t-arq').onchange = ev => { const f = ev.target.files[0]; if (f) destinoComprovante(f); ev.target.value = ''; };
     const t = App.$('#trocar-eu'); if (t) t.onclick = ev => { ev.preventDefault(); try { localStorage.removeItem('nc-eu-' + (App.estado.uid || 'local')); } catch {} App.pedirEu().then(() => App.mostrarAtual()); };
     el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => detalhe(b.dataset.g));

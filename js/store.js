@@ -96,7 +96,8 @@ const Store = (() => {
     lancInter(mes) {
       const doPainel = d.gastos.filter(g => g.forma === 'inter' && U.mesFatura(g.data) === mes).map(g => ({
         id: g.id, data: g.data, descricao: g.descricao, categoria: g.categoria, valor: g.valor,
-        divisao: g.pessoa === 'ambos' ? 'meio' : g.pessoa, parteA: 0, mes, origem: 'compras', fixo: !!g.fixoId
+        divisao: g.pessoa === 'ambos' ? 'meio' : g.pessoa, parteA: 0, mes, origem: 'compras', fixo: !!g.fixoId,
+        pessoa: g.pessoa, forma: g.forma, adiantou: g.adiantou, pag: g.pag
       }));
       return d.inter.filter(l => U.mesFatura(l.data) === mes).map(l => ({ ...l, mes })).concat(doPainel);
     },

@@ -77,10 +77,9 @@
       { rotulo: App.nome('A'), valor: parteDe(gastos, 0), cor: '#9b5de5' }, { rotulo: App.nome('B'), valor: parteDe(gastos, 1), cor: '#f4c53d' }])}
       ${App.barra('Por categoria', segsCat)}</div>`;
     App.$('#cats').innerHTML = '';
-    const todosGastos = Store.gastos.lista(), dv = U.saldoAcertos(todosGastos), liq = dv.A - dv.B;
-    const nPend = todosGastos.filter(g => U.pendente(g, 'A') || U.pendente(g, 'B')).length;
+    const PP = U.pendencias(Store.gastos.lista()), nPend = PP.A.total + PP.B.total;
     App.$('#acerto').hidden = !nPend;
-    App.$('#acerto').innerHTML = nPend ? `${liq === 0 ? `${nPend} pagamento(s) de parte pendente(s)` : `${U.esc(App.nome(liq > 0 ? 'A' : 'B'))} deve ${U.brl(Math.abs(liq))} para ${U.esc(App.nome(liq > 0 ? 'B' : 'A'))}`}
+    App.$('#acerto').innerHTML = nPend ? `${['A', 'B'].filter(k => PP[k].total > 0).map(k => `${U.esc(App.nome(k))} deve ${U.brl(PP[k].total)}`).join(' · ')}
       <br><button class="btn sec" id="b-pend" style="margin-top:6px">Ver / pagar pendências</button>` : '';
     const bp = App.$('#b-pend'); if (bp) bp.onclick = () => App.pendencias();
     const partesChips = g => g.pag ? ['A', 'B'].filter(p => U.parteDe(g, p) > 0).map(p => `<span class="chip ${U.pendente(g, p) ? 'ambos' : 'ok'}" title="${U.pendente(g, p) ? 'pendente' : 'pago'}">${U.pendente(g, p) ? '⏳' : '✔'} ${U.esc(App.nome(p))}</span>`).join(' ') : '';
