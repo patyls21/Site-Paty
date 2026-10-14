@@ -203,7 +203,7 @@ const Lancar = (() => {
       const gr = P[k].grupos[c];
       const botao = k === e ? `<button type="button" class="btn mini-b" data-gp="${c}">Pagar tudo · ${U.brl(gr.total)}</button>`
         : c === e ? `<button type="button" class="btn sec mini-b" data-gr="${c}">${U.esc(n(k))} pagou tudo</button>` : '';
-      return `<section class="grupo"><div class="grupo-cab"><div><b>${rotuloCredor(c)}</b><br><span class="sub">${gr.itens.length} item(ns) · ${U.brl(gr.total)}</span></div>${botao}</div>
+      return `<section class="grupo-pend"><div class="grupo-cab"><div><b>${rotuloCredor(c)}</b><br><span class="sub">${gr.itens.length} item(ns) · ${U.brl(gr.total)}</span></div>${botao}</div>
         ${gr.itens.slice().sort((a, b) => b.data.localeCompare(a.data)).map(g => `<div class="pend pend-lin"><div><b>${U.esc(g.descricao)}</b><br><span class="sub">${U.dataBR(g.data)} · parte ${U.brl(U.parteDe(g, k))}</span></div>
           ${k === e ? `<button type="button" class="btn sec mini-b" data-g="${g.id}">Pagar só este</button>` : ''}</div>`).join('')}</section>`;
     }).join('');
