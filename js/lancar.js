@@ -190,13 +190,15 @@ const Lancar = (() => {
     }, null, 'Confirmar pagamento');
   }
 
-  const rotuloCredor = c => c === 'INTER' ? '💳 Fatura do Inter' : c === 'OUTRO' ? '📦 Outros (pagamento direto)' : `💸 Pix para ${n(c)}`;
+  const rotuloCredor = c => c === 'INTER' ? '💳 Fatura do Inter' : (c === 'A' || c === 'B') ? `💸 Pix para ${n(c)}` : '📦 Outros (pagamento direto)';
 
   // pendências dos dois, com total, agrupadas por para quem se paga; usada também ao receber um comprovante compartilhado
   async function pendencias(arquivo) {
     const e = await App.pedirEu(); if (!e) return;
     const o = App.outro(e), P = U.pendencias(Store.gastos.lista());
-    const credores = k => ['INTER', 'A', 'B', 'OUTRO'].filter(c => P[k].grupos[c]);
+    const ordem = ['INTER', 'A', 'B', 'OUTRO'];
+    // grupos conhecidos na ordem certa; qualquer outro que apareça também é mostrado (nunca some dinheiro da lista)
+    const credores = k => [...ordem.filter(c => P[k].grupos[c]), ...Object.keys(P[k].grupos).filter(c => !ordem.includes(c))];
     const bloco = k => credores(k).map(c => {
       const gr = P[k].grupos[c];
       const botao = k === e ? `<button type="button" class="btn mini-b" data-gp="${c}">Pagar tudo · ${U.brl(gr.total)}</button>`

@@ -61,7 +61,8 @@ const U = {
   // g.pag = { A: {pago, data, comps:[ids]}, B: {...} }; gastos antigos (sem pag) não têm controle
   pendente: (g, p) => !!g.pag && U.parteDe(g, p) > 0 && !(g.pag[p] && g.pag[p].pago),
   // para quem se deve uma parte pendente: 'A'/'B' = quem adiantou o valor, 'INTER' = fatura do cartão, 'OUTRO' = pagamento direto
-  credorDe: g => g.adiantou || (g.forma === 'inter' ? 'INTER' : 'OUTRO'),
+  // (qualquer valor estranho em "adiantou" é ignorado, para a parte nunca ficar sem grupo)
+  credorDe: g => (g.adiantou === 'A' || g.adiantou === 'B') ? g.adiantou : (g.forma === 'inter' ? 'INTER' : 'OUTRO'),
   // tudo o que cada um ainda falta pagar, agrupado por credor: { A: { total, grupos: { credor: { total, itens } } }, B: {...} }
   pendencias(gastos) {
     const r = { A: { total: 0, grupos: {} }, B: { total: 0, grupos: {} } };
