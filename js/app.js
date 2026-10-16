@@ -66,9 +66,10 @@ const App = (() => {
       { k: 'nomeA', rotulo: 'Seu nome', req: true },
       { k: 'nomeB', rotulo: 'Nome do namorado', req: true },
       { k: 'diaFechamento', rotulo: 'Dia em que a fatura do Inter fecha (1 a 28)', tipo: 'number' },
+      { k: 'diaVencimento', rotulo: 'Dia do vencimento / débito automático da fatura (1 a 28)', tipo: 'number' },
       { k: 'cats', rotulo: 'Categorias (separadas por vírgula)' }
     ], { ...Store.config, cats: Store.categorias.join(', ') }, f => {
-      Store.setConfig({ nomeA: f.nomeA.trim(), nomeB: f.nomeB.trim(), diaFechamento: Math.min(28, Math.max(1, parseInt(f.diaFechamento, 10) || 16)) });
+      Store.setConfig({ nomeA: f.nomeA.trim(), nomeB: f.nomeB.trim(), diaFechamento: Math.min(28, Math.max(1, parseInt(f.diaFechamento, 10) || 16)), diaVencimento: Math.min(28, Math.max(1, parseInt(f.diaVencimento, 10) || 22)) });
       const l = f.cats.split(',').map(s => s.trim()).filter(Boolean);
       if (l.length) Store.setCategorias([...new Set(l)]);
     }, {

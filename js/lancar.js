@@ -190,6 +190,7 @@ const Lancar = (() => {
     }, null, 'Confirmar pagamento');
   }
 
+  const mesCurto = m => U.mesNome(m).split(' ')[0];
   const rotuloCredor = c => c === 'INTER' ? '💳 Fatura do Inter' : (c === 'A' || c === 'B') ? `💸 Pix para ${n(c)}` : '📦 Outros (pagamento direto)';
 
   // pendências dos dois, com total, agrupadas por para quem se paga; usada também ao receber um comprovante compartilhado
@@ -199,11 +200,26 @@ const Lancar = (() => {
     const ordem = ['INTER', 'A', 'B', 'OUTRO'];
     // grupos conhecidos na ordem certa; qualquer outro que apareça também é mostrado (nunca some dinheiro da lista)
     const credores = k => [...ordem.filter(c => P[k].grupos[c]), ...Object.keys(P[k].grupos).filter(c => !ordem.includes(c))];
+    // opções de pagamento de cada grupo. Fatura do Inter: a que acabou de fechar, só a próxima, ou tudo que se deve
+    const opMap = {};
+    const opcoes = (c, gr) => {
+      const soma = l => l.reduce((s, g) => s + U.parteDe(g, gr.k), 0);
+      if (c !== 'INTER') return [{ id: 'tudo', rot: 'Pagar tudo', itens: gr.itens }];
+      const fech = U.mesFaturaFechada(), prox = U.mesSoma(fech, 1), doMes = m => gr.itens.filter(g => U.mesFatura(g.data) === m);
+      const o = [{ id: 'fech', rot: `Pagar fatura de ${mesCurto(fech)}`, itens: doMes(fech) }, { id: 'prox', rot: `Pagar só a próxima (${mesCurto(prox)})`, itens: doMes(prox) }]
+        .filter(x => x.itens.length);
+      if (!o.some(x => x.itens.length === gr.itens.length)) o.push({ id: 'tudo', rot: 'Pagar tudo do Inter', itens: gr.itens });
+      return o.map(x => ({ ...x, total: soma(x.itens) }));
+    };
     const bloco = k => credores(k).map(c => {
-      const gr = P[k].grupos[c];
-      const botao = k === e ? `<button type="button" class="btn mini-b" data-gp="${c}">Pagar tudo · ${U.brl(gr.total)}</button>`
-        : c === e ? `<button type="button" class="btn sec mini-b" data-gr="${c}">${U.esc(n(k))} pagou tudo</button>` : '';
-      return `<section class="grupo-pend"><div class="grupo-cab"><div><b>${rotuloCredor(c)}</b><br><span class="sub">${gr.itens.length} item(ns) · ${U.brl(gr.total)}</span></div>${botao}</div>
+      const gr = P[k].grupos[c]; gr.k = k;
+      const pode = k === e || c === e;
+      const botoes = !pode ? '' : `<div class="op-pag">${opcoes(c, gr).map(x => {
+        const chave = `${k}|${c}|${x.id}`; opMap[chave] = { ...x, k, c };
+        const tot = x.total ?? gr.total;
+        return `<button type="button" class="btn${k === e ? '' : ' sec'} mini-b" data-op="${chave}">${k === e ? `${x.rot} · ${U.brl(tot)}` : `${U.esc(n(k))} pagou ${x.id === 'tudo' ? 'tudo' : x.rot.replace(/^Pagar /, '').replace(/^./, s => s.toLowerCase())} · ${U.brl(tot)}`}</button>`;
+      }).join('')}</div>`;
+      return `<section class="grupo-pend"><div class="grupo-cab"><div><b>${rotuloCredor(c)}</b><br><span class="sub">${gr.itens.length} item(ns) · ${U.brl(gr.total)}</span></div></div>${botoes}
         ${gr.itens.slice().sort((a, b) => b.data.localeCompare(a.data)).map(g => `<div class="pend pend-lin"><div><b>${U.esc(g.descricao)}</b><br><span class="sub">${U.dataBR(g.data)} · parte ${U.brl(U.parteDe(g, k))}</span></div>
           ${k === e ? `<button type="button" class="btn sec mini-b" data-g="${g.id}">Pagar só este</button>` : ''}</div>`).join('')}</section>`;
     }).join('');
@@ -218,8 +234,13 @@ const Lancar = (() => {
       ${P[o].total ? `<h4 class="sec-t">${U.esc(n(o))} deve</h4>${bloco(o)}` : ''}
       <div class="acoes">${arquivo ? '<button type="button" class="btn sec" id="p-novo">Criar novo gasto com este comprovante</button>' : ''}<button type="button" class="btn" data-fechar>Fechar</button></div></div>`, d => {
       d.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { d.close(); pagarParte(gastoPorId(b.dataset.g), arquivo, e); });
-      d.querySelectorAll('[data-gp]').forEach(b => b.onclick = () => { d.close(); pagarGrupo(P[e].grupos[b.dataset.gp].itens, e, rotuloCredor(b.dataset.gp).replace(/^\S+\s/, ''), arquivo); });
-      d.querySelectorAll('[data-gr]').forEach(b => b.onclick = () => { d.close(); pagarGrupo(P[o].grupos[b.dataset.gr].itens, o, `${n(o)} pagou`, null); });
+      d.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
+        const x = opMap[b.dataset.op], base = rotuloCredor(x.c).replace(/^\S+\s/, '');
+        d.close();
+        const oque = x.rot.replace(/^Pagar /, '');
+        if (x.k === e) pagarGrupo(x.itens, e, x.c === 'INTER' ? x.rot : base, arquivo);
+        else pagarGrupo(x.itens, x.k, `${n(x.k)} pagou ${x.c === 'INTER' ? oque.charAt(0).toLowerCase() + oque.slice(1) : 'tudo'}`, null);
+      });
       const pn = d.querySelector('#p-novo'); if (pn) pn.onclick = () => { d.close(); novoGasto({ arquivo }); };
     });
   }
@@ -285,7 +306,7 @@ const Lancar = (() => {
     App.$('#t-pagar').onclick = () => pendencias();
     const bp2 = App.$('#b-pend2'); if (bp2) bp2.onclick = () => pendencias();
     App.$('#t-arq').onchange = ev => { const f = ev.target.files[0]; if (f) destinoComprovante(f); ev.target.value = ''; };
-    const t = App.$('#trocar-eu'); if (t) t.onclick = ev => { ev.preventDefault(); try { localStorage.removeItem('nc-eu-' + (App.estado.uid || 'local')); } catch {} App.pedirEu().then(() => App.mostrarAtual()); };
+    const t = App.$('#trocar-eu'); if (t) t.onclick = ev => { ev.preventDefault(); try { localStorage.removeItem('nc-eu-' + (App.estado.uid || 'local')); } catch {} App.pedirEu().then(() => { App.mostrarAtual(); if (typeof Avisos !== 'undefined') Avisos.atualizar(); }); };
     el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => detalhe(b.dataset.g));
     el.querySelectorAll('[data-v]').forEach(b => b.onclick = ev => { ev.stopPropagation(); verComprovantes(b.dataset.v); });
     const sub = location.hash.split('/')[1];
@@ -318,7 +339,9 @@ const Lancar = (() => {
   return {
     aoIniciar() {
       (async () => {
-        await App.pedirEu(); App.mostrarAtual(); await receberCompartilhado();
+        await App.pedirEu(); App.mostrarAtual();
+        if (typeof Avisos !== 'undefined') Avisos.aoIniciar();
+        await receberCompartilhado();
         pronto = true; while (fila.length) destinoComprovante(fila.shift());
       })().catch(console.error);
     }

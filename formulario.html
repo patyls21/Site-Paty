@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261014b">
+<link rel="stylesheet" href="css/style.css?v=20261016a">
 </head>
 <body class="solo">
 <header class="barra">
@@ -22,8 +22,9 @@
     <button class="icon js-sair" aria-label="Sair" hidden>⎋</button>
   </div>
 </header>
+<div id="aviso-fatura" hidden></div>
 <main id="main"></main>
-<p class="sub" style="text-align:center;font-size:.72rem;margin:6px 0 0">versão 20261014b</p>
+<p class="sub" style="text-align:center;font-size:.72rem;margin:6px 0 0">versão 20261016a</p>
 
 <!-- elementos que o app.js espera (não aparecem neste formulário) -->
 <div hidden>
@@ -52,11 +53,12 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/supabase-config.js?v=20261014b"></script>
-<script src="js/util.js?v=20261014b"></script>
-<script src="js/store.js?v=20261014b"></script>
-<script src="js/app.js?v=20261014b"></script>
-<script src="js/lancar.js?v=20261014b"></script>
+<script src="js/supabase-config.js?v=20261016a"></script>
+<script src="js/util.js?v=20261016a"></script>
+<script src="js/store.js?v=20261016a"></script>
+<script src="js/app.js?v=20261016a"></script>
+<script src="js/lancar.js?v=20261016a"></script>
+<script src="js/avisos.js?v=20261016a"></script>
 <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 <script>App.iniciar().catch(e => { console.error(e); alert('Erro ao iniciar: ' + e.message); });</script>
 </body>

@@ -20,6 +20,20 @@ const U = {
     const mes = dataISO.slice(0, 7);
     return Number(dataISO.slice(8, 10)) >= U.diaFecha() ? U.mesSoma(mes, 1) : mes;
   },
+  // vencimento (e débito automático) da fatura: padrão dia 22
+  diaVence: () => Math.min(28, Math.max(1, Math.round(Number(Store.config.diaVencimento)) || 22)),
+  // fatura "de um mês" M fecha no dia X de M. A última que já fechou é a de M se hoje >= X, senão a do mês anterior
+  mesFaturaFechada(hojeISO = U.hoje()) {
+    const mes = hojeISO.slice(0, 7);
+    return Number(hojeISO.slice(8, 10)) >= U.diaFecha() ? mes : U.mesSoma(mes, -1);
+  },
+  // datas (ISO) de fechamento e vencimento da fatura do mês M; se o vencimento é <= dia do fechamento, cai no mês seguinte
+  datasFatura(mes) {
+    const [y, m] = mes.split('-').map(Number), f = U.diaFecha(), v = U.diaVence();
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { fecha: iso(new Date(y, m - 1, f)), vence: iso(new Date(y, m - 1 + (v > f ? 0 : 1), v)) };
+  },
+  diasEntre: (aISO, bISO) => Math.round((new Date(bISO + 'T12:00:00') - new Date(aISO + 'T12:00:00')) / 864e5),
   // período coberto pela fatura "de um mês" (ex.: "16/09 a 15/10")
   periodoFatura(mes) {
     const [y, m] = mes.split('-').map(Number), d = U.diaFecha();

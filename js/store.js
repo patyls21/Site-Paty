@@ -4,7 +4,7 @@ const Store = (() => {
   const KEY = 'nosso-controle-v1';
   const COLS = ['gastos', 'inter', 'acertos', 'comprovantes', 'fixos', 'futuros', 'pontos', 'viagens', 'pix'];
   const padrao = () => ({
-    config: { nomeA: 'Patrícia', nomeB: 'Namorado', acrescimoFuturo: 0, reaisPorPonto: 2.5, conversao: 1, bonus: 100, diaFechamento: 16 },
+    config: { nomeA: 'Patrícia', nomeB: 'Namorado', acrescimoFuturo: 0, reaisPorPonto: 2.5, conversao: 1, bonus: 100, diaFechamento: 16, diaVencimento: 22 },
     categorias: ['iFood', 'Streaming', 'Duo Gourmet', 'Render (guardado)', 'Mercado', 'Transporte', 'Lazer', 'Casa', 'Saúde', 'Compras', 'Contas', 'Outros'],
     gastos: [], inter: [], faturas: {}, acertos: [], comprovantes: [], fixos: [], futuros: [], pontos: [], viagens: [], pix: []
   });

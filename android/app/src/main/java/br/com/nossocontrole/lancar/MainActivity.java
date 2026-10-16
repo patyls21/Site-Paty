@@ -1,15 +1,19 @@
 package br.com.nossocontrole.lancar;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.util.Base64;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -96,8 +100,30 @@ public class MainActivity extends Activity {
             }
         });
 
+        web.addJavascriptInterface(new PonteAvisos(), "NCAndroid");
+
         web.loadUrl(SITE);
         tratarIntent(getIntent());
+    }
+
+    // ---------- avisos da fatura: o site entrega o plano, o aparelho agenda as notificações ----------
+
+    private class PonteAvisos {
+        @JavascriptInterface
+        public void agendar(final String planoJson) {
+            runOnUiThread(() -> {
+                if (Build.VERSION.SDK_INT >= 33
+                        && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 9);
+                }
+                AvisosFatura.salvar(MainActivity.this, planoJson);
+            });
+        }
+
+        @JavascriptInterface
+        public void cancelar() {
+            AvisosFatura.salvar(MainActivity.this, "[]");
+        }
     }
 
     @Override

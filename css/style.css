@@ -187,3 +187,13 @@ dialog table{margin:0}
   td.v{font-size:1.1rem;color:var(--realce)}
   table{background:transparent;border:0}
 }
+
+/* pagar fatura (opções) e aviso de fatura fechada */
+.op-pag{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.aviso-fatura{max-width:1200px;margin:16px auto 0;padding:12px 16px;border-radius:var(--raio);background:var(--tag-ouro);color:var(--tag-ouro-t);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:.92rem;border:1px solid var(--tag-ouro-t)}
+.aviso-fatura.urgente{background:var(--danger);color:#fff;border-color:var(--danger)}
+.aviso-fatura.urgente .btn.sec{color:#fff;border-color:#fff}
+.aviso-acoes{display:flex;gap:8px;flex-wrap:wrap}
+.solo .aviso-fatura{max-width:560px;margin:12px 14px 0}
+@media (min-width:600px){.solo .aviso-fatura{margin:12px auto 0}}
+@media (max-width:760px){.aviso-fatura{margin:12px 14px 0}}
