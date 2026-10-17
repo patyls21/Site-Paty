@@ -202,3 +202,7 @@ dialog form{grid-template-columns:minmax(0,1fr)}
 dialog label{min-width:0}
 dialog input,dialog select{width:100%;min-width:0;box-sizing:border-box;text-overflow:ellipsis}
 dialog{max-width:94vw;overflow-x:hidden}
+
+/* assinatura 2P */
+img.logo2p{display:block;margin:14px auto 0;width:56px;height:56px;border-radius:14px;opacity:.95}
+#login img.logo2p{width:92px;height:92px;border-radius:20px;margin-top:18px}
