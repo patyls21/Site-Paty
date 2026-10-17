@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261017c">
+<link rel="stylesheet" href="css/style.css?v=20261017d">
 </head>
 <body class="solo">
 <header class="barra">
@@ -24,8 +24,7 @@
 </header>
 <div id="aviso-fatura" hidden></div>
 <main id="main"></main>
-<p class="sub" style="text-align:center;font-size:.72rem;margin:6px 0 0">versão 20261017c</p>
-<img class="logo2p" src="icons/logo-2p.png" alt="2P" width="56" height="56">
+<p class="sub" style="text-align:center;font-size:.72rem;margin:6px 0 0">versão 20261017d</p>
 
 <!-- elementos que o app.js espera (não aparecem neste formulário) -->
 <div hidden>
@@ -43,7 +42,6 @@
     <label>Senha<input name="senha" type="password" autocomplete="current-password" minlength="6" required></label>
     <p id="login-erro" role="alert"></p>
     <button class="btn" type="submit" id="login-ok">Entrar</button>
-    <img class="logo2p" src="icons/logo-2p.png" alt="2P" width="56" height="56">
   </form>
   <div id="espera" hidden>
     <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 2.7 5 6 5c2 0 3.4 1.1 4 2.3h4C14.6 6.1 16 5 18 5c3.3 0 5.1 3.4 3.6 6.8C19.5 16.4 12 21 12 21z"/></svg><span>Nosso Controle</span></div>
@@ -55,12 +53,12 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/supabase-config.js?v=20261017c"></script>
-<script src="js/util.js?v=20261017c"></script>
-<script src="js/store.js?v=20261017c"></script>
-<script src="js/app.js?v=20261017c"></script>
-<script src="js/lancar.js?v=20261017c"></script>
-<script src="js/avisos.js?v=20261017c"></script>
+<script src="js/supabase-config.js?v=20261017d"></script>
+<script src="js/util.js?v=20261017d"></script>
+<script src="js/store.js?v=20261017d"></script>
+<script src="js/app.js?v=20261017d"></script>
+<script src="js/lancar.js?v=20261017d"></script>
+<script src="js/avisos.js?v=20261017d"></script>
 <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 <script>App.iniciar().catch(e => { console.error(e); alert('Erro ao iniciar: ' + e.message); });</script>
 </body>
