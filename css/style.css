@@ -197,3 +197,8 @@ dialog table{margin:0}
 .solo .aviso-fatura{max-width:560px;margin:12px 14px 0}
 @media (min-width:600px){.solo .aviso-fatura{margin:12px auto 0}}
 @media (max-width:760px){.aviso-fatura{margin:12px 14px 0}}
+/* formulários em janela: nada passa da largura da tela (select com texto longo e campo de arquivo alargavam a janela) */
+dialog form{grid-template-columns:minmax(0,1fr)}
+dialog label{min-width:0}
+dialog input,dialog select{width:100%;min-width:0;box-sizing:border-box;text-overflow:ellipsis}
+dialog{max-width:94vw;overflow-x:hidden}
