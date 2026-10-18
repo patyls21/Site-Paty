@@ -249,6 +249,12 @@
     // lembrete no dia de cada depósito avulso ainda "a colocar", só para a pessoa que vai colocar
     avisosDoDia: (iso, quem) => !quem ? [] : Store.cofres.lista().flatMap(cx => (cx.avulsos || []).filter(a => !a.feito && a.quem === quem && a.data === iso).map(a => ({
       tipo: 'caixinha', urgente: false, titulo: `🐷 Hoje é dia de colocar na caixinha!`, texto: `${n(quem)}, coloque ${U.brl(a.valor)} na caixinha "${cx.nome}" hoje.` }))),
+    // quanto ainda está marcado para colocar na caixinha (depósitos avulsos "a colocar"), por pessoa
+    programado: id => {
+      const c = Store.cofres.lista().find(x => x.id === id), r = { A: 0, B: 0, total: 0 };
+      (c && c.avulsos || []).forEach(a => { if (!a.feito) { r[a.quem] += a.valor; r.total += a.valor; } });
+      return r;
+    },
     ultimoDia: () => Store.cofres.lista().flatMap(cx => (cx.avulsos || []).filter(a => !a.feito).map(a => a.data)).reduce((u, d) => d > u ? d : u, ''),
     nome: id => { const c = Store.cofres.lista().find(x => x.id === id); return c ? c.nome : null; },
     saldoEm: (id, fim) => { const c = Store.cofres.lista().find(x => x.id === id); return c ? simular(c, fim).saldo : 0; }

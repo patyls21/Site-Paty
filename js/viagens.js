@@ -62,6 +62,7 @@
   const saldoViagem = (m, iso) => m.fonte && typeof Caixinhas !== 'undefined' && Caixinhas.nome(m.fonte) !== null ? Caixinhas.saldoEm(m.fonte, iso) : simular(iso).saldo;
   // fração que sai da caixinha: o valor todo ou só a metade (cada um paga a sua parte)
   const fator = m => m.fracao === 'metade' ? 0.5 : 1;
+  const progDe = m => m.fonte && cofreDe(m) !== null ? Caixinhas.programado(m.fonte) : { A: 0, B: 0, total: 0 };
   const totais = m => {
     const itens = m.itens || [];
     const total = Math.round(itens.reduce((s, i) => s + totalItem(i), 0) * fator(m)), pago = Math.round(itens.filter(i => i.pago).reduce((s, i) => s + totalItem(i), 0) * fator(m));
@@ -177,20 +178,23 @@
         <button class="btn sec mini-b" id="v-cfg">Alterar</button> <button class="btn mini-b" id="v-real">Atualizar com o saldo real</button></p>`;
 
     if (m) {
-      const t = totais(m), caixa = saldoViagem(m, hoje), falta = Math.max(0, t.faltaPagar - caixa), naCaixa = Math.min(caixa, t.faltaPagar);
+      // caixinha à parte: o que já está marcado para colocar (depósitos avulsos "a colocar") conta como coberto
+      const t = totais(m), caixa = saldoViagem(m, hoje), prog = progDe(m), naCaixa = Math.min(caixa, t.faltaPagar);
+      const marcado = Math.min(prog.total, Math.max(0, t.faltaPagar - naCaixa)), falta = Math.max(0, t.faltaPagar - caixa - prog.total);
       const meses = mesesAte(m), porMes = falta / Math.max(1, meses);
-      const proj = saldoViagem(m, m.data), sobra = proj - t.faltaPagar;
+      const proj = saldoViagem(m, m.data) + prog.total, sobra = proj - t.faltaPagar;
       const pct = t.total ? Math.round((t.pago + naCaixa) / t.total * 100) : 0;
       html += `
       <section class="bloco"><h2>🧳 ${U.esc(m.nome)}</h2>
         <p class="sub" style="margin:-4px 0 12px">Check-in <b>${U.dataBR(m.data)}</b> · check-out <b>${U.dataBR(fim(m))}</b> · ${noites(m)} noite(s)<br>Paga com: <b>${cofreDe(m) !== null ? U.esc(cofreDe(m)) + ' (caixinha à parte)' : 'a caixinha mensal das viagens'}</b>${m.fracao === 'metade' ? ' · só a sua metade' : ''}</p>
         <div class="viagem-grade">
-          <div class="viagem-graf">${rosca([{ v: t.pago, cor: '#2fb872' }, { v: naCaixa, cor: '#f4c53d' }, { v: falta, cor: '#e5533d' }])}
+          <div class="viagem-graf">${rosca([{ v: t.pago, cor: '#2fb872' }, { v: naCaixa, cor: '#f4c53d' }, { v: marcado, cor: '#5b9bd5' }, { v: falta, cor: '#e5533d' }])}
             <div class="viagem-pct"><b>${pct}%</b><span>da meta</span></div></div>
           <div>
             <div class="cmp-leg" style="flex-direction:column;align-items:flex-start;gap:6px;margin:0 0 10px">
               <span><i style="background:#2fb872"></i>Já pago: ${U.brl(t.pago)}</span>
               <span><i style="background:#f4c53d"></i>Na caixinha (conta para a meta): ${U.brl(naCaixa)}</span>
+              ${marcado > 0 ? `<span><i style="background:#5b9bd5"></i>Marcado para colocar: ${U.brl(marcado)}</span>` : ''}
               <span><i style="background:#e5533d"></i>Falta juntar: <b>${U.brl(falta)}</b></span>
             </div>
             <div class="cards" style="margin:0">
@@ -203,8 +207,9 @@
         <div class="cards">
           <div class="card ok"><small>Colocar por mês (casal)</small><strong>${U.brl(Math.ceil(porMes))}</strong></div>
           <div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(porMes / 2))}</strong></div>
+          ${['A', 'B'].map(k => prog[k] > 0 ? `<div class="card ${k === 'A' ? 'a' : 'b'}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(prog[k])}</strong></div>` : '').join('')}
         </div>
-        <div class="acerto">${falta === 0 ? 'Meta batida! 🎉 Já dá para pagar tudo que falta.' : `Mantendo o aporte padrão, na data da viagem a caixinha terá ${U.brl(proj)}: ${sobra >= 0 ? `sobra ${U.brl(sobra)} 💜` : `ainda faltam ${U.brl(-sobra)}.`}`}</div>
+        <div class="acerto">${falta === 0 ? (prog.total > 0 ? 'Tudo coberto 💜 Falta só colocar o que já está marcado na caixinha.' : 'Meta batida! 🎉 Já dá para pagar tudo que falta.') : `${m.fonte ? 'Com o que já está marcado na caixinha' : 'Mantendo o aporte padrão'}, na data da viagem a caixinha terá ${U.brl(proj)}: ${sobra >= 0 ? `sobra ${U.brl(sobra)} 💜` : `ainda faltam ${U.brl(-sobra)}.`}`}</div>
         <div class="filtros"><button class="btn" id="v-item">+ Gasto previsto</button><button class="btn sec" id="v-edit">Editar viagem</button><button class="btn sec" id="v-del">Excluir viagem</button></div>
         ${(m.itens || []).length ? `<table><thead><tr><th>Gasto</th><th class="v">Qtd</th><th class="v">Cada</th><th class="v">Total</th><th>Situação</th><th></th></tr></thead><tbody>${m.itens.map(i => `
           <tr><td>${U.esc(i.desc)}</td><td class="v">${String(i.qtd).replace('.', ',')}</td><td class="v">${U.brl(i.unit)}</td><td class="v">${U.brl(totalItem(i))}</td>
@@ -255,7 +260,7 @@
     avisosDoDia(iso) {
       const out = [];
       Store.metas.lista().forEach(m => {
-        const dias = U.diasEntre(iso, m.data), t = totais(m), falta = Math.max(0, t.faltaPagar - saldoViagem(m, iso));
+        const dias = U.diasEntre(iso, m.data), t = totais(m), falta = Math.max(0, t.faltaPagar - saldoViagem(m, iso) - progDe(m).total);
         const meta = t.total ? ` Falta juntar ${U.brl(falta)} da meta.` : '';
         const base = { tipo: 'viagem', urgente: false };
         if (dias > 0 && (dias === 30 || dias === 15 || dias === 7 || dias <= 3)) {
