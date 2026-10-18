@@ -35,7 +35,7 @@ import java.util.List;
  */
 public class MainActivity extends Activity {
 
-    private static final String SITE = "https://patyls21.github.io/Site-Paty/formulario.html";
+    private static final String SITE = "https://patyls21.github.io/Site-Paty/index.html#lancar";
     private static final int PEDIDO_ARQUIVO = 7;
     private static final int LIMITE_BYTES = 15 * 1024 * 1024;
     private static final int PEDACO = 150000; // caracteres base64 por chamada ao JavaScript
