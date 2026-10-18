@@ -57,9 +57,14 @@
     const ls = Store.metas.lista().slice().sort((a, b) => a.data.localeCompare(b.data));
     return ls.find(x => x.id === C().viagemMetaAtiva) || ls.find(x => x.data >= U.hoje()) || ls[0] || null;
   };
+  // de onde sai o dinheiro da viagem: a caixinha mensal das viagens (padrão) ou uma caixinha da aba Caixinhas ("viagem por fora")
+  const cofreDe = m => m.fonte && typeof Caixinhas !== 'undefined' ? Caixinhas.nome(m.fonte) : null;
+  const saldoViagem = (m, iso) => m.fonte && typeof Caixinhas !== 'undefined' && Caixinhas.nome(m.fonte) !== null ? Caixinhas.saldoEm(m.fonte, iso) : simular(iso).saldo;
+  // fração que sai da caixinha: o valor todo ou só a metade (cada um paga a sua parte)
+  const fator = m => m.fracao === 'metade' ? 0.5 : 1;
   const totais = m => {
     const itens = m.itens || [];
-    const total = itens.reduce((s, i) => s + totalItem(i), 0), pago = itens.filter(i => i.pago).reduce((s, i) => s + totalItem(i), 0);
+    const total = Math.round(itens.reduce((s, i) => s + totalItem(i), 0) * fator(m)), pago = Math.round(itens.filter(i => i.pago).reduce((s, i) => s + totalItem(i), 0) * fator(m));
     return { total, pago, faltaPagar: total - pago };
   };
   const mesesAte = m => { const [y1, m1] = U.mesAtual().split('-').map(Number), [y2, m2] = m.data.slice(0, 7).split('-').map(Number); return (y2 - y1) * 12 + (m2 - m1); };
@@ -117,11 +122,15 @@
     App.form(v ? 'Editar viagem' : 'Nova viagem', [
       { k: 'nome', rotulo: 'Nome (ex.: Rio Quente + Laqua)', req: true },
       { k: 'data', rotulo: 'Check-in (ida)', tipo: 'date', req: true },
-      { k: 'fim', rotulo: 'Check-out (volta)', tipo: 'date', req: true, dica: 'Os avisos de "falta pouco" vão de 1 mês antes até o check-out.' }
-    ], v ? { ...v, fim: fim(v) } : { data: U.hoje(), fim: U.hoje() }, f => {
+      { k: 'fim', rotulo: 'Check-out (volta)', tipo: 'date', req: true, dica: 'Os avisos de "falta pouco" vão de 1 mês antes até o check-out.' },
+      { k: 'fonte', rotulo: 'Pago com qual caixinha?', tipo: 'select', opcoes: [['', 'A caixinha mensal das viagens'], ...Store.cofres.lista().map(c => [c.id, `${c.icone || '🐷'} ${c.nome} (caixinha à parte)`])],
+        dica: 'Para uma viagem "por fora", crie a caixinha na aba Caixinhas e escolha ela aqui.' },
+      { k: 'fracao', rotulo: 'Quanto desta viagem sai dessa caixinha?', tipo: 'select', opcoes: [['tudo', 'O valor todo'], ['metade', 'Só metade (cada um paga a sua parte)']] }
+    ], v ? { ...v, fim: fim(v), fonte: v.fonte || '', fracao: v.fracao || 'tudo' } : { data: U.hoje(), fim: U.hoje(), fonte: '', fracao: 'tudo' }, f => {
       if (f.fim < f.data) { alert('O check-out não pode ser antes do check-in.'); return false; }
-      if (v) Store.metas.set(v.id, { ...v, nome: f.nome.trim(), data: f.data, fim: f.fim });
-      else { const o = Store.metas.add({ nome: f.nome.trim(), data: f.data, fim: f.fim, itens: [] }); Store.setConfig({ viagemMetaAtiva: o.id }); }
+      const o = { nome: f.nome.trim(), data: f.data, fim: f.fim, fonte: f.fonte, fracao: f.fracao };
+      if (v) Store.metas.set(v.id, { ...v, ...o });
+      else { const n = Store.metas.add({ ...o, itens: [] }); Store.setConfig({ viagemMetaAtiva: n.id }); }
     });
   }
 
@@ -168,13 +177,13 @@
         <button class="btn sec mini-b" id="v-cfg">Alterar</button> <button class="btn mini-b" id="v-real">Atualizar com o saldo real</button></p>`;
 
     if (m) {
-      const t = totais(m), caixa = agora.saldo, falta = Math.max(0, t.faltaPagar - caixa), naCaixa = Math.min(caixa, t.faltaPagar);
+      const t = totais(m), caixa = saldoViagem(m, hoje), falta = Math.max(0, t.faltaPagar - caixa), naCaixa = Math.min(caixa, t.faltaPagar);
       const meses = mesesAte(m), porMes = falta / Math.max(1, meses);
-      const proj = simular(m.data).saldo, sobra = proj - t.faltaPagar;
+      const proj = saldoViagem(m, m.data), sobra = proj - t.faltaPagar;
       const pct = t.total ? Math.round((t.pago + naCaixa) / t.total * 100) : 0;
       html += `
       <section class="bloco"><h2>🧳 ${U.esc(m.nome)}</h2>
-        <p class="sub" style="margin:-4px 0 12px">Check-in <b>${U.dataBR(m.data)}</b> · check-out <b>${U.dataBR(fim(m))}</b> · ${noites(m)} noite(s)</p>
+        <p class="sub" style="margin:-4px 0 12px">Check-in <b>${U.dataBR(m.data)}</b> · check-out <b>${U.dataBR(fim(m))}</b> · ${noites(m)} noite(s)<br>Paga com: <b>${cofreDe(m) !== null ? U.esc(cofreDe(m)) + ' (caixinha à parte)' : 'a caixinha mensal das viagens'}</b>${m.fracao === 'metade' ? ' · só a sua metade' : ''}</p>
         <div class="viagem-grade">
           <div class="viagem-graf">${rosca([{ v: t.pago, cor: '#2fb872' }, { v: naCaixa, cor: '#f4c53d' }, { v: falta, cor: '#e5533d' }])}
             <div class="viagem-pct"><b>${pct}%</b><span>da meta</span></div></div>
@@ -246,7 +255,7 @@
     avisosDoDia(iso) {
       const out = [];
       Store.metas.lista().forEach(m => {
-        const dias = U.diasEntre(iso, m.data), t = totais(m), falta = Math.max(0, t.faltaPagar - simular(iso).saldo);
+        const dias = U.diasEntre(iso, m.data), t = totais(m), falta = Math.max(0, t.faltaPagar - saldoViagem(m, iso));
         const meta = t.total ? ` Falta juntar ${U.brl(falta)} da meta.` : '';
         const base = { tipo: 'viagem', urgente: false };
         if (dias > 0 && (dias === 30 || dias === 15 || dias === 7 || dias <= 3)) {

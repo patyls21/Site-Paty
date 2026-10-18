@@ -212,6 +212,12 @@
     el.querySelectorAll('[data-mes]').forEach(b => b.onclick = () => formMes(cx, b.dataset.mes));
   }
 
+  // usado pela aba Viagens (viagem paga com uma caixinha à parte)
+  window.Caixinhas = {
+    nome: id => { const c = Store.cofres.lista().find(x => x.id === id); return c ? c.nome : null; },
+    saldoEm: (id, fim) => { const c = Store.cofres.lista().find(x => x.id === id); return c ? simular(c, fim).saldo : 0; }
+  };
+
   const subId = () => location.hash.slice(1).split('/')[1] || '';
   const atual = () => Store.cofres.lista().find(c => c.id === subId());
 
