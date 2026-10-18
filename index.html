@@ -12,7 +12,7 @@
 <script>try{document.documentElement.dataset.theme=localStorage.getItem('nc-tema')||'dark'}catch(e){document.documentElement.dataset.theme='dark'}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261018b">
+<link rel="stylesheet" href="css/style.css?v=20261018c">
 </head>
 <body>
 <aside class="sidebar">
@@ -25,6 +25,7 @@
     <div class="grupo">Planejamento</div>
     <button data-aba="futuro"><i>🏠</i><span>Gastos Futuros</span></button>
     <button data-aba="viagens"><i>🧳</i><span>Viagens</span></button>
+    <button data-aba="caixinhas"><i>🐷</i><span>Caixinhas</span></button>
     <button data-aba="loop"><i>✈</i><span>Pontos Loop</span></button>
     <div class="grupo adm" hidden>Administração</div>
     <button data-aba="usuarios" class="adm" hidden><i>👥</i><span>Usuários</span></button>
@@ -63,7 +64,7 @@
     <div class="f-brand">♥ Nosso Controle</div>
     <p>Gastos do mês, cartão Inter, planos para morar juntos e pontos Loop num só lugar.</p>
     <p id="f-dados">Os dados ficam guardados neste navegador. Use o backup (⚙) de vez em quando.</p>
-    <p class="copy" id="f-modo">© 2026 Uso pessoal. Feito por Patrícia Silva. · versão 20261018b</p>
+    <p class="copy" id="f-modo">© 2026 Uso pessoal. Feito por Patrícia Silva. · versão 20261018c</p>
   </footer>
 </div>
 <dialog id="dlg"></dialog>
@@ -87,18 +88,19 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/supabase-config.js?v=20261018b"></script>
-<script src="js/util.js?v=20261018b"></script>
-<script src="js/store.js?v=20261018b"></script>
-<script src="js/app.js?v=20261018b"></script>
-<script src="js/lancar.js?v=20261018b"></script>
-<script src="js/avisos.js?v=20261018b"></script>
-<script src="js/compras.js?v=20261018b"></script>
-<script src="js/inter.js?v=20261018b"></script>
-<script src="js/futuro.js?v=20261018b"></script>
-<script src="js/loop.js?v=20261018b"></script>
-<script src="js/viagens.js?v=20261018b"></script>
-<script src="js/usuarios.js?v=20261018b"></script>
+<script src="js/supabase-config.js?v=20261018c"></script>
+<script src="js/util.js?v=20261018c"></script>
+<script src="js/store.js?v=20261018c"></script>
+<script src="js/app.js?v=20261018c"></script>
+<script src="js/lancar.js?v=20261018c"></script>
+<script src="js/avisos.js?v=20261018c"></script>
+<script src="js/compras.js?v=20261018c"></script>
+<script src="js/inter.js?v=20261018c"></script>
+<script src="js/futuro.js?v=20261018c"></script>
+<script src="js/loop.js?v=20261018c"></script>
+<script src="js/viagens.js?v=20261018c"></script>
+<script src="js/caixinhas.js?v=20261018c"></script>
+<script src="js/usuarios.js?v=20261018c"></script>
 <script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 <script>App.iniciar().catch(e => { console.error(e); alert('Erro ao iniciar: ' + e.message); });</script>
 </body>

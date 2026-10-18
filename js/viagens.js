@@ -242,6 +242,7 @@
 
   // avisos de uma data: 1 mês, 15, 7 e 3 dias antes do check-in e depois todo dia até o check-out
   window.Viagens = {
+    saldoHoje: () => simular(U.hoje()).saldo,
     avisosDoDia(iso) {
       const out = [];
       Store.metas.lista().forEach(m => {
