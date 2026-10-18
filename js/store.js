@@ -8,7 +8,7 @@ const Store = (() => {
       // caixinha de viagens (valores em centavos): aporte mensal de cada um, saldo ao começar a contar, rendimento (% do CDI)
       viagemAporteA: 30000, viagemAporteB: 30000, viagemSaldoInicial: 0, viagemInicio: '', cdiAnual: 14.15, pctCdi: 120, viagemMetaAtiva: '',
       // dia do depósito de cada um (cai no próximo dia útil se for fim de semana) e saldo real informado (recomeça o cálculo dali)
-      viagemDiaA: 26, viagemDiaB: 26, viagemAncoraData: '', viagemAncoraSaldo: 0 },
+      emailA: '', emailB: '', viagemDiaA: 26, viagemDiaB: 26, viagemAncoraData: '', viagemAncoraSaldo: 0 },
     categorias: ['iFood', 'Streaming', 'Duo Gourmet', 'Render (guardado)', 'Mercado', 'Transporte', 'Lazer', 'Casa', 'Saúde', 'Compras', 'Contas', 'Outros'],
     gastos: [], inter: [], faturas: {}, acertos: [], comprovantes: [], fixos: [], futuros: [], pontos: [], viagens: [], pix: [], caixinha: [], metas: [], cofres: []
   });

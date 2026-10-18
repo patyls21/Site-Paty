@@ -306,7 +306,7 @@ const Lancar = (() => {
     App.$('#t-pagar').onclick = () => pendencias();
     const bp2 = App.$('#b-pend2'); if (bp2) bp2.onclick = () => pendencias();
     App.$('#t-arq').onchange = ev => { const f = ev.target.files[0]; if (f) destinoComprovante(f); ev.target.value = ''; };
-    const t = App.$('#trocar-eu'); if (t) t.onclick = ev => { ev.preventDefault(); try { localStorage.removeItem('nc-eu-' + (App.estado.uid || 'local')); } catch {} App.pedirEu().then(() => { App.mostrarAtual(); if (typeof Avisos !== 'undefined') Avisos.atualizar(); }); };
+    const t = App.$('#trocar-eu'); if (t) t.onclick = ev => { ev.preventDefault(); App.trocarEu().then(() => { App.mostrarAtual(); if (typeof Avisos !== 'undefined') Avisos.atualizar(); }); };
     el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => detalhe(b.dataset.g));
     el.querySelectorAll('[data-v]').forEach(b => b.onclick = ev => { ev.stopPropagation(); verComprovantes(b.dataset.v); });
     const sub = location.hash.split('/')[1];

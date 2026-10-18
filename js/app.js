@@ -40,14 +40,34 @@ const App = (() => {
 
   // Quem sou eu (A ou B): lembrado neste aparelho, por conta de login
   const chaveEu = () => 'nc-eu-' + (estado.uid || 'local');
-  const eu = () => { try { return localStorage.getItem(chaveEu()); } catch { return null; } };
+  // com login, o e-mail da conta diz quem é (config.emailA / emailB, aprendido na 1ª vez ou digitado em ⚙); sem isso, o que foi escolhido neste aparelho
+  const eu = () => {
+    const em = (estado.email || '').toLowerCase(), c = Store.config;
+    if (em) { if ((c.emailA || '').toLowerCase() === em) return 'A'; if ((c.emailB || '').toLowerCase() === em) return 'B'; }
+    try { return localStorage.getItem(chaveEu()); } catch { return null; }
+  };
+  // grava na nuvem que este e-mail é de A ou B (e tira o mesmo e-mail do outro, se estiver lá)
+  function lembrarEmail(p) {
+    const em = (estado.email || '').toLowerCase(); if (!em) return;
+    const c = Store.config, outro = p === 'A' ? 'emailB' : 'emailA', meu = p === 'A' ? 'emailA' : 'emailB';
+    if ((c[meu] || '').toLowerCase() === em && (c[outro] || '').toLowerCase() !== em) return;
+    Store.setConfig({ [meu]: em, ...((c[outro] || '').toLowerCase() === em ? { [outro]: '' } : {}) });
+  }
   function pedirEu() {
     return new Promise(ok => {
       if (eu()) return ok(eu());
-      form('Quem é você?', [{ k: 'p', rotulo: 'Assim o site registra os gastos no seu nome neste aparelho', tipo: 'select', opcoes: [['A', nome('A')], ['B', nome('B')]] }],
-        { p: 'A' }, f => { try { localStorage.setItem(chaveEu(), f.p); } catch {} ok(f.p); }, null, 'Continuar');
+      form('Quem é você?', [{ k: 'p', rotulo: estado.email ? 'Só desta vez: o site guarda o seu e-mail e não pergunta mais' : 'Assim o site registra os gastos no seu nome neste aparelho', tipo: 'select', opcoes: [['A', nome('A')], ['B', nome('B')]] }],
+        { p: 'A' }, f => { try { localStorage.setItem(chaveEu(), f.p); } catch {} lembrarEmail(f.p); ok(f.p); }, null, 'Continuar');
       $('#dlg').addEventListener('close', () => ok(eu()), { once: true });
     });
+  }
+  // "Não sou eu": esquece a escolha (neste aparelho e o e-mail guardado) e pergunta de novo
+  function trocarEu() {
+    const em = (estado.email || '').toLowerCase(), c = Store.config;
+    try { localStorage.removeItem(chaveEu()); } catch {}
+    const limpar = {}; if (em && (c.emailA || '').toLowerCase() === em) limpar.emailA = ''; if (em && (c.emailB || '').toLowerCase() === em) limpar.emailB = '';
+    if (Object.keys(limpar).length) Store.setConfig(limpar);
+    return pedirEu();
   }
 
   function mostrar(aba) {
@@ -66,10 +86,12 @@ const App = (() => {
       { k: 'nomeA', rotulo: 'Seu nome', req: true },
       { k: 'nomeB', rotulo: 'Nome do namorado', req: true },
       { k: 'diaFechamento', rotulo: 'Dia em que a fatura do Inter fecha (1 a 28)', tipo: 'number' },
+      { k: 'emailA', rotulo: 'E-mail de login de quem é o "Seu nome" (opcional)', tipo: 'email', dica: 'Quem entrar com esse e-mail é reconhecido sem perguntar.' },
+      { k: 'emailB', rotulo: 'E-mail de login do namorado (opcional)', tipo: 'email' },
       { k: 'diaVencimento', rotulo: 'Dia do vencimento / débito automático da fatura (1 a 28)', tipo: 'number' },
       { k: 'cats', rotulo: 'Categorias (separadas por vírgula)' }
     ], { ...Store.config, cats: Store.categorias.join(', ') }, f => {
-      Store.setConfig({ nomeA: f.nomeA.trim(), nomeB: f.nomeB.trim(), diaFechamento: Math.min(28, Math.max(1, parseInt(f.diaFechamento, 10) || 16)), diaVencimento: Math.min(28, Math.max(1, parseInt(f.diaVencimento, 10) || 22)) });
+      Store.setConfig({ emailA: (f.emailA || '').trim().toLowerCase(), emailB: (f.emailB || '').trim().toLowerCase(), nomeA: f.nomeA.trim(), nomeB: f.nomeB.trim(), diaFechamento: Math.min(28, Math.max(1, parseInt(f.diaFechamento, 10) || 16)), diaVencimento: Math.min(28, Math.max(1, parseInt(f.diaVencimento, 10) || 22)) });
       const l = f.cats.split(',').map(s => s.trim()).filter(Boolean);
       if (l.length) Store.setCategorias([...new Set(l)]);
     }, {
@@ -131,7 +153,7 @@ const App = (() => {
         };
       });
     }
-    estado.admin = !!eu.admin; estado.uid = session?.user?.id || eu.id;
+    estado.admin = !!eu.admin; estado.uid = session?.user?.id || eu.id; estado.email = session?.user?.email || eu.email || '';
     document.querySelectorAll('.adm').forEach(x => x.hidden = !estado.admin);
     const n = await Store.conectar(sb);
     const locais = n === 0 && Store.dadosLocais();
@@ -139,7 +161,7 @@ const App = (() => {
   }
 
   return {
-    estado, nome, form, navMes, $, mostrarAtual: () => mostrar(atual), eu, pedirEu, outro: k => k === 'A' ? 'B' : 'A',
+    estado, nome, form, navMes, $, mostrarAtual: () => mostrar(atual), eu, pedirEu, trocarEu, outro: k => k === 'A' ? 'B' : 'A',
     // meta: () => ({ crumb, titulo, sub, cta: { rotulo, fn } })
     registrar: (k, f, meta) => { abas[k] = f; metas[k] = meta; },
     // barra comparativa horizontal; segs: [{ rotulo, valor, cor }]
