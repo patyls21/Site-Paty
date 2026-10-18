@@ -1,28 +1,31 @@
 (() => {
-  const DIV = () => [['meio', 'Meio a meio (50/50)'], ['A', `Só ${App.nome('A')}`], ['B', `Só ${App.nome('B')}`], ['custom', `Personalizada (parte de ${App.nome('A')})`]];
-  const nomeDiv = l => ({ meio: '50/50', A: `Só ${App.nome('A')}`, B: `Só ${App.nome('B')}` }[l.divisao] || `${U.brl(U.partes(l)[0])} / ${U.brl(U.partes(l)[1])}`);
+  const nomeDiv = l => l.divisao === 'custom' ? U.ids().filter(i => U.partes(l)[i] > 0).map(i => `${App.nome(i)} ${U.brl(U.partes(l)[i])}`).join(' / ') : App.rotuloDiv(l.divisao);
 
   function editar(l) {
+    const ids = U.ids();
     const campos = [
       { k: 'data', rotulo: 'Data da compra', tipo: 'date', req: true },
       { k: 'descricao', rotulo: 'Descrição', req: true },
       { k: 'valor', rotulo: 'Valor (R$)', inputmode: 'decimal', req: true },
       { k: 'categoria', rotulo: 'Categoria', tipo: 'select', opcoes: Store.categorias.map(c => [c, c]) },
-      { k: 'divisao', rotulo: 'Divisão', tipo: 'select', opcoes: DIV() },
-      { k: 'parteA', rotulo: `Se personalizada: parte de ${App.nome('A')} (R$)`, inputmode: 'decimal' }
+      { k: 'divisao', rotulo: 'Dividir entre', tipo: 'checks', opcoes: ids.map(i => [i, App.nome(i)]), dica: 'O valor é dividido igualmente entre os marcados.' },
+      ...ids.map(i => ({ k: 'p_' + i, rotulo: `Parte de ${App.nome(i)} (R$) — só se a divisão não for igual`, inputmode: 'decimal' }))
     ];
-    const v = l ? { ...l, valor: U.valorInput(l.valor), parteA: l.divisao === 'custom' ? U.valorInput(l.parteA) : '' }
+    const v = l ? { ...l, valor: U.valorInput(l.valor), divisao: l.divisao === 'custom' ? '' : l.divisao }
       : { data: U.hoje(), divisao: 'meio', categoria: Store.categorias[0] };
-    App.form(l ? 'Editar lançamento' : 'Novo lançamento no Inter', campos, v, f => {
+    if (l && l.divisao === 'custom') ids.forEach(i => v['p_' + i] = U.valorInput(U.partes(l)[i]));
+    App.form(l ? 'Editar lançamento' : 'Novo lançamento no ' + U.cartao(), campos, v, f => {
       const valor = U.parseValor(f.valor);
       if (!(valor > 0)) { alert('Valor inválido.'); return false; }
-      let parteA = 0;
-      if (f.divisao === 'custom') {
-        parteA = U.parseValor(f.parteA);
-        if (!(parteA >= 0 && parteA <= valor)) { alert('Parte inválida (entre 0 e o valor total).'); return false; }
-      }
+      const custom = ids.some(i => (f['p_' + i] || '').trim());
+      let divisao = f.divisao, partesCustom;
+      if (custom) { // valores diferentes para cada um: a soma tem que fechar com o valor da compra
+        partesCustom = {}; ids.forEach(i => partesCustom[i] = (f['p_' + i] || '').trim() ? U.parseValor(f['p_' + i]) : 0);
+        if (!ids.every(i => partesCustom[i] >= 0) || ids.reduce((s, i) => s + partesCustom[i], 0) !== valor) { alert('A soma das partes precisa ser igual ao valor da compra.'); return false; }
+        divisao = 'custom';
+      } else if (!divisao) { alert('Marque pelo menos uma pessoa em "Dividir entre".'); return false; }
       // mes = fatura à qual a compra pertence, pela data e pelo dia de fechamento
-      const o = { data: f.data, descricao: f.descricao, categoria: f.categoria, valor, divisao: f.divisao, parteA, mes: U.mesFatura(f.data) };
+      const o = { data: f.data, descricao: f.descricao, categoria: f.categoria, valor, divisao, ...(partesCustom ? { partesCustom } : {}), mes: U.mesFatura(f.data) };
       l ? Store.inter.set(l.id, o) : Store.inter.add(o);
     });
   }
@@ -30,7 +33,7 @@
   function faturaForm() {
     const m = App.estado.mes, f = Store.fatura(m);
     App.form('Fatura de ' + U.mesNome(m), [
-      { k: 'pagaPor', rotulo: 'Quem pagou a fatura', tipo: 'select', opcoes: [['A', App.nome('A')], ['B', App.nome('B')]] },
+      { k: 'pagaPor', rotulo: 'Quem pagou a fatura', tipo: 'select', opcoes: U.ids().map(i => [i, App.nome(i)]) },
       { k: 'status', rotulo: 'Situação', tipo: 'select', opcoes: [['aberta', 'Aberta'], ['paga', 'Paga']] },
       { k: 'pagaEm', rotulo: 'Data do pagamento', tipo: 'date' }
     ], { ...f, pagaEm: f.pagaEm || U.hoje() }, v => { Store.setFatura(m, { pagaPor: v.pagaPor, status: v.status, pagaEm: v.status === 'paga' ? v.pagaEm : '' }); });
@@ -55,24 +58,22 @@
   App.registrar('inter', el => {
     const m = App.estado.mes, ls = Store.lancInter(m).sort((a, b) => b.data.localeCompare(a.data));
     const fat = Store.fatura(m);
-    const d = U.calcularDivisao(ls, fat, []), cs = Store.comprovantes.lista().filter(c => c.mes === m && !c.gastoId);
-    const nome = App.nome;
+    const ids = U.ids(), d = U.totaisPorPessoa(ls), cs = Store.comprovantes.lista().filter(c => c.mes === m && !c.gastoId);
+    const nome = App.nome, classe = k => ids.indexOf(k) === 0 ? 'a' : ids.indexOf(k) === 1 ? 'b' : '';
     // quanto falta cada um pagar: só as partes ainda pendentes (as pagas com "Pagar minha parte" saem da conta)
     const P = U.pendencias(ls.filter(l => l.pag)), falta = k => P[k].total, semControle = ls.filter(l => !l.pag).length;
-    const frase = !ls.length ? 'Sem lançamentos neste fechamento.' : (!falta('A') && !falta('B')) ? 'Tudo pago 💜'
-      : ['A', 'B'].filter(k => falta(k) > 0).map(k => `${nome(k)} ainda falta pagar ${U.brl(falta(k))}`).join(' · ');
+    const frase = !ls.length ? 'Sem lançamentos neste fechamento.' : !ids.some(k => falta(k) > 0) ? 'Tudo pago 💜'
+      : ids.filter(k => falta(k) > 0).map(k => `${nome(k)} ainda falta pagar ${U.brl(falta(k))}`).join(' · ');
     el.innerHTML = `<div class="mes" id="nav"></div>
       <p class="sub" style="text-align:center;margin:-6px 0 14px">Fatura que fecha dia ${U.diaFecha()}: compras de <b>${U.periodoFatura(m)}</b></p>
       <div class="cards">
         <div class="card"><small>Total da fatura</small><strong>${U.brl(d.total)}</strong></div>
-        <div class="card a"><small>Parte de ${U.esc(nome('A'))}</small><strong>${U.brl(d.devA)}</strong></div>
-        <div class="card b"><small>Parte de ${U.esc(nome('B'))}</small><strong>${U.brl(d.devB)}</strong></div>
+        ${ids.map(k => `<div class="card ${classe(k)}"><small>Parte de ${U.esc(nome(k))}</small><strong>${U.brl(d.por[k])}</strong></div>`).join('')}
         <div class="card"><small>Fatura</small><span class="selo ${fat.status}">${fat.status === 'paga' ? 'PAGA' : 'ABERTA'}</span>
           <small style="margin-top:4px">${fat.pagaEm ? 'paga em ' + U.dataBR(fat.pagaEm) : ''}</small></div>
       </div>
       <div class="cards">
-        <div class="card a"><small>Falta pagar · ${U.esc(nome('A'))}</small><strong>${U.brl(falta('A'))}</strong></div>
-        <div class="card b"><small>Falta pagar · ${U.esc(nome('B'))}</small><strong>${U.brl(falta('B'))}</strong></div>
+        ${ids.map(k => `<div class="card ${classe(k)}"><small>Falta pagar · ${U.esc(nome(k))}</small><strong>${U.brl(falta(k))}</strong></div>`).join('')}
       </div>
       <div class="acerto">${U.esc(frase)}${semControle ? `<br><span class="sub" style="font-weight:500">${semControle} lançamento(s) antigo(s) não têm controle de pagamento e não entram nessa conta.</span>` : ''}</div>
       <div class="filtros"><button class="btn" id="b-novo">+ Lançamento</button><button class="btn sec" id="b-pend">Ver / pagar pendências</button><button class="btn sec" id="b-fat">Marcar fatura como paga</button></div>
@@ -93,5 +94,5 @@
     el.querySelectorAll('[data-v]').forEach(b => b.onclick = () => App.verComprovantes(b.dataset.v));
     el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => ver(Store.comprovantes.lista().find(c => c.id === b.dataset.c)));
     App.$('#arq').onchange = async e => { for (const f of e.target.files) await anexar(f); };
-  }, () => ({ crumb: 'Financeiro › Cartão Inter', titulo: 'Cartão Inter', sub: 'Fatura compartilhada, divisão entre vocês e comprovantes de pagamento.', cta: { rotulo: 'Novo lançamento', fn: () => App.novoGasto() } }));
+  }, () => ({ crumb: 'Financeiro › ' + U.cartao(), titulo: U.cartao(), sub: 'Fatura compartilhada, divisão entre as pessoas da conta e comprovantes de pagamento.', cta: { rotulo: 'Novo lançamento', fn: () => App.novoGasto() } }));
 })();

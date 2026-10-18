@@ -16,7 +16,7 @@
           <button class="btn ${u.aprovado ? 'sec' : ''}" data-ap="${u.id}" data-v="${!u.aprovado}">${u.aprovado ? 'Bloquear' : 'Liberar'}</button>
           ${u.aprovado ? `<button class="btn sec" data-ad="${u.id}" data-v="${!u.admin}">${u.admin ? 'Tirar admin' : 'Tornar admin'}</button>` : ''}
           <button class="mini" data-rm="${u.id}" aria-label="Excluir conta">🗑</button>`}</td></tr>`).join('')}</tbody></table>
-      <p class="sub" style="margin-top:10px">Quem cria conta pelo site fica "Aguardando" até você liberar aqui.</p>`;
+      <p class="sub" style="margin-top:10px">Quem cria login pelo site e não foi cadastrado como adicional fica "Aguardando" até você liberar aqui. Liberada, a pessoa cria a própria conta e vira titular.</p>`;
     const mudar = async (id, campos) => {
       const r = await Store.sb.from('usuarios').update(campos).eq('id', id);
       if (r.error) alert('Erro: ' + r.error.message); App.mostrarAtual();
@@ -28,5 +28,5 @@
       const r = await Store.sb.from('usuarios').delete().eq('id', b.dataset.rm);
       if (r.error) alert('Erro: ' + r.error.message); App.mostrarAtual();
     });
-  }, () => ({ crumb: 'Administração › Usuários', titulo: 'Usuários', sub: 'Libere ou bloqueie quem pode acessar o site.', cta: null }));
+  }, () => ({ crumb: 'Administração › Liberar contas', titulo: 'Liberar contas', sub: 'Libere quem pode ter uma conta própria (ser titular). Adicionais não precisam de liberação: entram pelo cadastro da titular.', cta: null }));
 })();

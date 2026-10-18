@@ -1,3 +1,31 @@
+// Pontos do cartão: o programa (Loop, Esfera, Livelo…) é escolhido por conta. Os pontos saem sozinhos da fatura do cartão.
+// "rpp" = reais gastos por ponto (valor sugerido; confira no seu cartão e ajuste em "Regras").
+const Programas = (() => {
+  const LISTA = [
+    { id: 'nenhum', nome: 'Nenhum (não uso pontos)', curto: '' },
+    { id: 'loop', nome: 'Loop (Inter)', curto: 'Loop', rpp: 2.5 },
+    { id: 'esfera', nome: 'Esfera (Santander)', curto: 'Esfera', rpp: 1 },
+    { id: 'livelo', nome: 'Livelo', curto: 'Livelo', rpp: 1 },
+    { id: 'smiles', nome: 'Smiles', curto: 'Smiles', rpp: 1 },
+    { id: 'latam', nome: 'LATAM Pass', curto: 'LATAM Pass', rpp: 1 },
+    { id: 'azul', nome: 'Azul Fidelidade', curto: 'Azul', rpp: 1 },
+    { id: 'iupp', nome: 'iupp (Itaú)', curto: 'iupp', rpp: 1 },
+    { id: 'nubank', nome: 'Nubank Rewards', curto: 'Nubank Rewards', rpp: 1 },
+    { id: 'outro', nome: 'Outro', curto: '', rpp: 1 }
+  ];
+  const achar = id => LISTA.find(p => p.id === id) || LISTA[0];
+  return {
+    lista: () => LISTA,
+    // nome mostrado na aba e nos textos: "Pontos Esfera", "Pontos"
+    nome() {
+      const c = Store.config, p = achar(c.programa), curto = p.id === 'outro' ? (c.programaNome || '').trim() : p.curto;
+      return curto ? 'Pontos ' + curto : 'Pontos';
+    },
+    // regras iniciais ao trocar de programa
+    regras: id => ({ reaisPorPonto: achar(id).rpp || 1, conversao: 1, bonus: 0 })
+  };
+})();
+
 (() => {
   const fmt = n => Math.round(n).toLocaleString('pt-BR');
   // pontos automáticos de um mês = total da fatura do Inter / reais por ponto (arredondado para baixo)
@@ -31,7 +59,7 @@
   function editarViagem(v) {
     App.form(v ? 'Editar viagem' : 'Nova viagem', [
       { k: 'nome', rotulo: 'Destino / viagem', req: true },
-      { k: 'milhas', rotulo: 'Milhas necessárias (total do casal)', tipo: 'number', req: true }
+      { k: 'milhas', rotulo: 'Milhas necessárias (total)', tipo: 'number', req: true }
     ], v || {}, f => {
       const milhas = Math.round(Number(f.milhas));
       if (!(milhas > 0)) { alert('Quantidade inválida.'); return false; }
@@ -60,30 +88,32 @@
     const vs = Store.viagens.lista();
     el.innerHTML = `
       <div class="cards">
-        <div class="card"><small>Saldo de pontos Loop</small><strong>${fmt(confirmado)}</strong></div>
+        <div class="card"><small>Saldo de ${U.esc(Programas.nome().toLowerCase())}</small><strong>${fmt(confirmado)}</strong></div>
         <div class="card a"><small>A cair (fatura aberta)</small><strong>+${fmt(aCair)}</strong></div>
         <div class="card b"><small>Média mensal (${base.length ? 'últimos ' + base.length + ' meses' : 'mês atual'})</small><strong>${fmt(media)}</strong></div>
         <div class="card ok"><small>Saldo em milhas (com promo)</small><strong>${fmt(confirmado * mult)}</strong></div>
       </div>
       <section class="bloco"><h2>⚙ Regras</h2>
         <div class="filtros">
+          <label class="sub">Programa<select id="c-prog">${Programas.lista().filter(p => p.id !== 'nenhum').map(p => `<option value="${p.id}" ${p.id === c.programa ? 'selected' : ''}>${U.esc(p.nome)}</option>`).join('')}</select></label>
           <label class="sub">Reais gastos por ponto<input id="c-rpp" type="number" step="0.1" value="${c.reaisPorPonto}"></label>
           <label class="sub">Milhas por ponto<input id="c-conv" type="number" step="0.1" value="${c.conversao}"></label>
           <label class="sub">Bônus da promoção (%)<input id="c-bonus" type="number" step="5" value="${c.bonus}"></label>
         </div>
-        <p class="sub">Os pontos saem sozinhos da fatura do Inter: <b>1 ponto a cada R$ ${Number(c.reaisPorPonto).toFixed(2).replace('.', ',')}</b>. Com a promoção, <b>1 ponto = ${mult.toFixed(2).replace('.', ',')} milha(s)</b>.</p>
+        <p class="sub">Os pontos saem sozinhos da ${U.daFatura()}: <b>1 ponto a cada R$ ${Number(c.reaisPorPonto).toFixed(2).replace('.', ',')}</b>. Com a promoção, <b>1 ponto = ${mult.toFixed(2).replace('.', ',')} milha(s)</b>.
+          Ao trocar o programa, o valor de "reais por ponto" é um valor sugerido: confira no seu cartão e ajuste.</p>
       </section>
       <section class="bloco"><h2>Pontos por mês (automático)</h2>
         <table><thead><tr><th>Mês</th><th class="v">Fatura</th><th class="v">Pontos</th><th class="v">Extras</th><th>Situação</th></tr></thead><tbody>${linhas.map(l => `
           <tr><td>${U.mesNome(l.m)}</td><td class="v">${U.brl(l.gasto)}</td><td class="v">+${fmt(l.auto)}</td><td class="v">${l.ext ? '+' + fmt(l.ext) : '—'}</td>
           <td><span class="chip ${l.fech ? 'ok' : 'ambos'}">${l.fech ? 'Creditado' : 'A cair'}</span></td></tr>`).join('')}</tbody></table>
-        <p class="sub" style="margin-top:8px">A fatura vira "Creditado" depois do dia de fechamento (dia ${U.diaFecha()}) ou quando você a marca como paga na aba Inter. Os pontos são arredondados para baixo, por fatura.</p>
+        <p class="sub" style="margin-top:8px">A fatura vira "Creditado" depois do dia de fechamento (dia ${U.diaFecha()}) ou quando você a marca como paga na aba ${U.esc(U.cartao())}. Os pontos são arredondados para baixo, por fatura.</p>
       </section>
       <section class="bloco"><h2>✈ Metas de viagem</h2>
         ${vs.length ? `<table><thead><tr><th>Viagem</th><th class="v">Milhas</th><th class="v">Pontos necessários</th><th class="v">Faltam</th><th>Previsão</th><th></th></tr></thead><tbody>${vs.map(v => {
           const nec = v.milhas / mult, falta = Math.max(0, nec - confirmado), mm = media > 0 ? Math.ceil(falta / media) : null;
           return `<tr><td>${U.esc(v.nome)}</td><td class="v">${fmt(v.milhas)}</td><td class="v">${fmt(nec)}</td><td class="v">${fmt(falta)}</td>
-            <td>${falta === 0 ? '🎉 Já dá!' : mm ? `~${mm} mes(es) · ${U.mesNome(U.mesSoma(hoje, mm))}` : 'Sem gastos no Inter p/ prever'}</td>
+            <td>${falta === 0 ? '🎉 Já dá!' : mm ? `~${mm} mes(es) · ${U.mesNome(U.mesSoma(hoje, mm))}` : 'Sem gastos no cartão p/ prever'}</td>
             <td><button class="mini" data-ve="${v.id}" aria-label="Editar">✏️</button><button class="mini" data-vx="${v.id}" aria-label="Excluir">🗑</button></td></tr>`; }).join('')}</tbody></table>`
           : '<p class="sub">Cadastre uma meta (ex.: Lisboa, 120.000 milhas ida e volta para 2).</p>'}
         <div class="filtros" style="margin-top:8px"><button class="btn sec" id="b-viagem">+ Nova viagem</button></div>
@@ -97,11 +127,16 @@
     const cfg = (id, k) => App.$(id).onchange = e => Store.setConfig({ [k]: Number(e.target.value) || 0 });
     cfg('#c-rpp', 'reaisPorPonto'); cfg('#c-conv', 'conversao'); cfg('#c-bonus', 'bonus');
     App.$('#c-rpp').onchange = e => Store.setConfig({ reaisPorPonto: Number(e.target.value) > 0 ? Number(e.target.value) : 2.5 });
+    App.$('#c-prog').onchange = e => {
+      const id = e.target.value;
+      const nome = id === 'outro' ? (prompt('Nome do programa de pontos:', c.programaNome || '') || '').trim() : '';
+      Store.setConfig({ programa: id, programaNome: nome, ...Programas.regras(id) });
+    };
     App.$('#b-ponto').onclick = () => editarPonto(null);
     App.$('#b-viagem').onclick = () => editarViagem(null);
     el.querySelectorAll('[data-pe]').forEach(b => b.onclick = () => editarPonto(Store.pontos.lista().find(p => p.id === b.dataset.pe)));
     el.querySelectorAll('[data-px]').forEach(b => b.onclick = () => { if (confirm('Excluir registro?')) Store.pontos.del(b.dataset.px); });
     el.querySelectorAll('[data-ve]').forEach(b => b.onclick = () => editarViagem(Store.viagens.lista().find(v => v.id === b.dataset.ve)));
     el.querySelectorAll('[data-vx]').forEach(b => b.onclick = () => { if (confirm('Excluir viagem?')) Store.viagens.del(b.dataset.vx); });
-  }, () => ({ crumb: 'Planejamento › Pontos Loop', titulo: 'Pontos Loop', sub: 'Pontos calculados sozinhos pela fatura do Inter e quanto falta para a próxima viagem.', cta: { rotulo: 'Extra / resgate', fn: () => editarPonto(null) } }));
+  }, () => ({ crumb: 'Planejamento › ' + Programas.nome(), titulo: Programas.nome(), sub: `Pontos calculados sozinhos pela ${U.daFatura()} e quanto falta para a próxima viagem.`, cta: { rotulo: 'Extra / resgate', fn: () => editarPonto(null) } }));
 })();

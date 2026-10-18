@@ -2,8 +2,10 @@
 (() => {
   const C = () => Store.config;
   const num = (v, pad = 0) => Number.isFinite(Number(v)) ? Number(v) : pad;
-  const pessoas = ['A', 'B'];
   const n = k => App.nome(k);
+  const cls = k => U.ids().indexOf(k) === 0 ? 'a' : U.ids().indexOf(k) === 1 ? 'b' : '';
+  // por pessoa: aporte e dia do depósito ficam em chaves viagemAporteA / viagemDiaA, viagemAporteB… (uma por id)
+  const zerado = () => { const r = { total: 0, data: {} }; U.ids().forEach(k => { r[k] = 0; r.data[k] = ''; }); return r; };
 
   // ---------- caixinha ----------
   // mês em que começa a contar: o configurado, senão o primeiro mês com aporte editado, senão o atual
@@ -18,10 +20,14 @@
   const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const dataCurta = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)} (${SEM[new Date(iso + 'T12:00:00').getDay()]})`;
   // aporte de cada um no mês: valor e data (padrão: o combinado; ou o que foi alterado naquele mês)
+  // retorna { v: { A: valor, … }, d: { A: data, … }, alterado, id }
   const aporteMes = m => {
-    const o = Store.caixinha.lista().find(x => x.mes === m), c = C();
-    const dA = (o && o.dataA) || diaUtil(m, num(c.viagemDiaA, 26)), dB = (o && o.dataB) || diaUtil(m, num(c.viagemDiaB, 26));
-    return o ? { A: o.A, B: o.B, dA, dB, alterado: true, id: o.id } : { A: num(c.viagemAporteA), B: num(c.viagemAporteB), dA, dB, alterado: false };
+    const o = Store.caixinha.lista().find(x => x.mes === m), c = C(), v = {}, d = {};
+    U.ids().forEach(k => {
+      d[k] = (o && o['data' + k]) || diaUtil(m, num(c['viagemDia' + k], 26));
+      v[k] = o ? num(o[k]) : num(c['viagemAporte' + k]);
+    });
+    return o ? { v, d, alterado: true, id: o.id } : { v, d, alterado: false };
   };
   // 120% do CDI: taxa anual efetiva a partir do CDI (252 dias úteis), depois rendimento por dia corrido
   const taxaAno = () => {
@@ -38,7 +44,7 @@
     const dep = []; let aportado = 0;
     for (let m = ini; m + '-01' <= fim; m = U.mesSoma(m, 1)) {
       const a = aporteMes(m);
-      [[a.dA, a.A], [a.dB, a.B]].forEach(([d, v]) => { if (v > 0 && d <= fim) { aportado += v; dep.push({ d, v }); } });
+      U.ids().forEach(k => { const d = a.d[k], v = a.v[k]; if (v > 0 && d <= fim) { aportado += v; dep.push({ d, v }); } });
     }
     dep.sort((x, y) => x.d.localeCompare(y.d));
     let bal = ancora ? num(c.viagemAncoraSaldo) : saldoIni, ult = ancora || ini + '-01';
@@ -62,7 +68,7 @@
   const saldoViagem = (m, iso) => m.fonte && typeof Caixinhas !== 'undefined' && Caixinhas.nome(m.fonte) !== null ? Caixinhas.saldoEm(m.fonte, iso) : simular(iso).saldo;
   // fração que sai da caixinha: o valor todo ou só a metade (cada um paga a sua parte)
   const fator = m => m.fracao === 'metade' ? 0.5 : 1;
-  const progDe = m => m.fonte && cofreDe(m) !== null ? Caixinhas.programado(m.fonte) : { A: 0, B: 0, total: 0 };
+  const progDe = m => m.fonte && cofreDe(m) !== null ? Caixinhas.programado(m.fonte) : zerado();
   const totais = m => {
     const itens = m.itens || [];
     const total = Math.round(itens.reduce((s, i) => s + totalItem(i), 0) * fator(m)), pago = Math.round(itens.filter(i => i.pago).reduce((s, i) => s + totalItem(i), 0) * fator(m));
@@ -72,22 +78,24 @@
 
   // ---------- formulários ----------
   function formCaixinha() {
-    const c = C();
+    const c = C(), ids = U.ids();
+    const vals = { ini: inicio(), saldo: U.valorInput(num(c.viagemSaldoInicial)), pct: String(c.pctCdi).replace('.', ','), cdi: String(c.cdiAnual).replace('.', ',') };
+    ids.forEach(k => { vals['ap' + k] = U.valorInput(num(c['viagemAporte' + k])); vals['dia' + k] = String(num(c['viagemDia' + k], 26)); });
     App.form('Caixinha: aporte e rendimento', [
-      { k: 'A', rotulo: `Aporte mensal padrão de ${n('A')} (R$)`, inputmode: 'decimal', req: true },
-      { k: 'B', rotulo: `Aporte mensal padrão de ${n('B')} (R$)`, inputmode: 'decimal', req: true },
-      { k: 'diaA', rotulo: `Dia do depósito de ${n('A')} (1 a 31)`, tipo: 'number', req: true, dica: 'Se cair no fim de semana, vale a segunda-feira.' },
-      { k: 'diaB', rotulo: `Dia do depósito de ${n('B')} (1 a 31)`, tipo: 'number', req: true, dica: 'Em um mês diferente, ajuste a data na linha do mês (✏️).' },
+      ...ids.flatMap(k => [
+        { k: 'ap' + k, rotulo: `Aporte mensal padrão de ${n(k)} (R$)`, inputmode: 'decimal', req: true },
+        { k: 'dia' + k, rotulo: `Dia do depósito de ${n(k)} (1 a 31)`, tipo: 'number', req: true, dica: 'Se cair no fim de semana, vale a segunda-feira. Em um mês diferente, ajuste a data na linha do mês (✏️).' }]),
       { k: 'ini', rotulo: 'Mês em que começou a contar', tipo: 'month', req: true, dica: 'Os aportes padrão valem a partir desse mês.' },
       { k: 'saldo', rotulo: 'Quanto já tinha na caixinha nesse mês, antes do aporte (R$)', inputmode: 'decimal', req: true },
       { k: 'pct', rotulo: 'Rende quantos % do CDI?', inputmode: 'decimal', req: true },
       { k: 'cdi', rotulo: 'CDI atual (% ao ano)', inputmode: 'decimal', req: true, dica: 'Confira o valor no site do Banco Central e atualize de vez em quando.' }
-    ], { A: U.valorInput(num(c.viagemAporteA)), B: U.valorInput(num(c.viagemAporteB)), diaA: String(num(c.viagemDiaA, 26)), diaB: String(num(c.viagemDiaB, 26)), ini: inicio(), saldo: U.valorInput(num(c.viagemSaldoInicial)), pct: String(c.pctCdi).replace('.', ','), cdi: String(c.cdiAnual).replace('.', ',') }, f => {
-      const A = U.parseValor(f.A), B = U.parseValor(f.B), saldo = U.parseValor(f.saldo);
+    ], vals, f => {
+      const saldo = U.parseValor(f.saldo), aps = ids.map(k => U.parseValor(f['ap' + k]));
       const pct = Number(String(f.pct).replace(',', '.')), cdi = Number(String(f.cdi).replace(',', '.'));
-      if (![A, B, saldo].every(v => v >= 0) || !(pct >= 0) || !(cdi >= 0) || !/^\d{4}-\d{2}$/.test(f.ini)) { alert('Confira os valores.'); return false; }
-      const dia = v => Math.min(31, Math.max(1, parseInt(v, 10) || 26));
-      Store.setConfig({ viagemAporteA: A, viagemAporteB: B, viagemDiaA: dia(f.diaA), viagemDiaB: dia(f.diaB), viagemSaldoInicial: saldo, viagemInicio: f.ini, pctCdi: pct, cdiAnual: cdi });
+      if (![...aps, saldo].every(v => v >= 0) || !(pct >= 0) || !(cdi >= 0) || !/^\d{4}-\d{2}$/.test(f.ini)) { alert('Confira os valores.'); return false; }
+      const dia = v => Math.min(31, Math.max(1, parseInt(v, 10) || 26)), novo = {};
+      ids.forEach((k, i) => { novo['viagemAporte' + k] = aps[i]; novo['viagemDia' + k] = dia(f['dia' + k]); });
+      Store.setConfig({ ...novo, viagemSaldoInicial: saldo, viagemInicio: f.ini, pctCdi: pct, cdiAnual: cdi });
     });
   }
 
@@ -95,7 +103,7 @@
   function formSaldoReal() {
     const c = C();
     App.form('Atualizar com o saldo real', [
-      { k: 'saldo', rotulo: 'Saldo que aparece no Mercado Pago agora (R$)', inputmode: 'decimal', req: true, dica: 'Depois disso o site só soma os depósitos novos e o rendimento a partir daqui.' },
+      { k: 'saldo', rotulo: 'Saldo que aparece no app do banco agora (R$)', inputmode: 'decimal', req: true, dica: 'Depois disso o site só soma os depósitos novos e o rendimento a partir daqui.' },
       { k: 'data', rotulo: 'Data desse saldo', tipo: 'date', req: true }
     ], { saldo: c.viagemAncoraData ? U.valorInput(num(c.viagemAncoraSaldo)) : U.valorInput(simular(U.hoje()).saldo), data: U.hoje() }, f => {
       const saldo = U.parseValor(f.saldo);
@@ -105,16 +113,14 @@
   }
 
   function formMes(m) {
-    const a = aporteMes(m);
-    App.form('Aporte de ' + U.mesNome(m), [
-      { k: 'A', rotulo: `${n('A')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
-      { k: 'dataA', rotulo: `Data do depósito de ${n('A')}`, tipo: 'date', req: true },
-      { k: 'B', rotulo: `${n('B')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
-      { k: 'dataB', rotulo: `Data do depósito de ${n('B')}`, tipo: 'date', req: true }
-    ], { A: U.valorInput(a.A), B: U.valorInput(a.B), dataA: a.dA, dataB: a.dB }, f => {
-      const A = U.parseValor(f.A), B = U.parseValor(f.B);
-      if (!(A >= 0) || !(B >= 0)) { alert('Valor inválido.'); return false; }
-      const o = { mes: m, A, B, dataA: f.dataA, dataB: f.dataB };
+    const a = aporteMes(m), ids = U.ids(), vals = {};
+    ids.forEach(k => { vals[k] = U.valorInput(a.v[k]); vals['data' + k] = a.d[k]; });
+    App.form('Aporte de ' + U.mesNome(m), ids.flatMap(k => [
+      { k, rotulo: `${n(k)} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
+      { k: 'data' + k, rotulo: `Data do depósito de ${n(k)}`, tipo: 'date', req: true }
+    ]), vals, f => {
+      const o = { mes: m };
+      for (const k of ids) { const v = U.parseValor(f[k]); if (!(v >= 0)) { alert('Valor inválido.'); return false; } o[k] = v; o['data' + k] = f['data' + k]; }
       a.id ? Store.caixinha.set(a.id, o) : Store.caixinha.add(o);
     }, a.alterado ? { rotulo: '↩ Voltar ao padrão', fn: () => Store.caixinha.del(a.id) } : null);
   }
@@ -173,7 +179,7 @@
         <div class="card a"><small>Rendimento estimado</small><strong>${U.brl(agora.rendimento)}</strong></div>
         <div class="card b"><small>Rende por mês (aprox.)</small><strong>${U.brl(Math.round(agora.saldo * (Math.pow(1 + taxaDia(), 30) - 1)))}</strong></div>
       </div>
-      <p class="sub">Aporte padrão: <b>${U.esc(n('A'))}</b> ${U.brl(num(c.viagemAporteA))} · <b>${U.esc(n('B'))}</b> ${U.brl(num(c.viagemAporteB))} por mês. Rendendo ${String(c.pctCdi).replace('.', ',')}% do CDI (${(taxaAno() * 100).toFixed(2).replace('.', ',')}% ao ano, valor bruto estimado).
+      <p class="sub">Aporte padrão: ${U.ids().map(k => `<b>${U.esc(n(k))}</b> ${U.brl(num(c['viagemAporte' + k]))}`).join(' · ')} por mês. Rendendo ${String(c.pctCdi).replace('.', ',')}% do CDI (${(taxaAno() * 100).toFixed(2).replace('.', ',')}% ao ano, valor bruto estimado).
         ${c.viagemAncoraData ? `Saldo ajustado pelo valor real de ${U.dataBR(c.viagemAncoraData)} (${U.brl(num(c.viagemAncoraSaldo))}).` : 'Valor estimado: confira com o app do banco e atualize.'}
         <button class="btn sec mini-b" id="v-cfg">Alterar</button> <button class="btn mini-b" id="v-real">Atualizar com o saldo real</button></p>`;
 
@@ -182,10 +188,13 @@
       const t = totais(m), caixa = saldoViagem(m, hoje), prog = progDe(m), naCaixa = Math.min(caixa, t.faltaPagar);
       const marcado = Math.min(prog.total, Math.max(0, t.faltaPagar - naCaixa)), falta = Math.max(0, t.faltaPagar - caixa - prog.total);
       const meses = mesesAte(m), porMes = falta / Math.max(1, meses);
-      // se só uma pessoa já tem depósito marcado, o que sobra para juntar é da outra (e a divisão por mês vale só para ela)
-      const resto = { A: 0, B: 0 };
-      if (falta > 0 && prog.total > 0) { if (prog.A > 0 && !(prog.B > 0)) resto.B = falta; else if (prog.B > 0 && !(prog.A > 0)) resto.A = falta; }
-      const soUm = resto.A > 0 || resto.B > 0;
+      // se só algumas pessoas já têm depósito marcado, o que sobra para juntar é de quem não tem (dividido entre elas, e a divisão por mês vale só para elas)
+      const ids = U.ids(), resto = {}; ids.forEach(k => resto[k] = 0);
+      if (falta > 0 && prog.total > 0) {
+        const sem = ids.filter(k => !(prog[k] > 0));
+        if (sem.length && sem.length < ids.length) sem.forEach(k => resto[k] = falta / sem.length);
+      }
+      const soUm = ids.some(k => resto[k] > 0);
       const proj = saldoViagem(m, m.data) + prog.total, sobra = proj - t.faltaPagar;
       const pct = t.total ? Math.round((t.pago + naCaixa) / t.total * 100) : 0;
       html += `
@@ -209,10 +218,10 @@
           </div>
         </div>
         <div class="cards">
-          ${soUm || (falta === 0 && prog.total > 0) ? '' : `<div class="card ok"><small>Colocar por mês (casal)</small><strong>${U.brl(Math.ceil(porMes))}</strong></div>
-          <div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(porMes / 2))}</strong></div>`}
-          ${['A', 'B'].map(k => prog[k] + resto[k] > 0 ? `<div class="card ${k === 'A' ? 'a' : 'b'}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(prog[k] + resto[k])}</strong>${prog[k] > 0 && prog.data[k] ? `<small style="margin-top:4px">${resto[k] > 0 ? U.brl(prog[k]) + ' ' : ''}até ${U.dataBR(prog.data[k]).slice(0, 5)}</small>` : ''}</div>` : '').join('')}
-          ${['A', 'B'].map(k => resto[k] > 0 ? `<div class="card ok"><small>Por mês · ${U.esc(n(k))}</small><strong>${U.brl(Math.ceil(resto[k] / Math.max(1, meses)))}</strong><small style="margin-top:4px">só a parte que falta</small></div>` : '').join('')}
+          ${soUm || (falta === 0 && prog.total > 0) ? '' : `<div class="card ok"><small>Colocar por mês (${ids.length > 1 ? 'todos' : 'total'})</small><strong>${U.brl(Math.ceil(porMes))}</strong></div>
+          ${ids.length > 1 ? `<div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(porMes / ids.length))}</strong></div>` : ''}`}
+          ${ids.map(k => prog[k] + resto[k] > 0 ? `<div class="card ${cls(k)}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(prog[k] + resto[k])}</strong>${prog[k] > 0 && prog.data[k] ? `<small style="margin-top:4px">${resto[k] > 0 ? U.brl(prog[k]) + ' ' : ''}até ${U.dataBR(prog.data[k]).slice(0, 5)}</small>` : ''}</div>` : '').join('')}
+          ${ids.map(k => resto[k] > 0 ? `<div class="card ok"><small>Por mês · ${U.esc(n(k))}</small><strong>${U.brl(Math.ceil(resto[k] / Math.max(1, meses)))}</strong><small style="margin-top:4px">só a parte que falta</small></div>` : '').join('')}
         </div>
         <div class="acerto">${falta === 0 ? (prog.total > 0 ? 'Tudo coberto 💜 Falta só colocar o que já está marcado na caixinha.' : 'Meta batida! 🎉 Já dá para pagar tudo que falta.') : `${m.fonte ? 'Com o que já está marcado na caixinha' : 'Mantendo o aporte padrão'}, na data da viagem a caixinha terá ${U.brl(proj)}: ${sobra >= 0 ? `sobra ${U.brl(sobra)} 💜` : `ainda faltam ${U.brl(-sobra)}.`}`}</div>
         <div class="filtros"><button class="btn" id="v-item">+ Gasto previsto</button><button class="btn sec" id="v-edit">Editar viagem</button><button class="btn sec" id="v-del">Excluir viagem</button></div>
@@ -238,10 +247,9 @@
     for (let mm = inicio(); mm <= ultimo; mm = U.mesSoma(mm, 1)) linhas.push(mm);
     html += `<section class="bloco"><h2>Aportes mês a mês</h2>
       <p class="sub">Por padrão entra o valor combinado no dia de cada um (fim de semana vira segunda-feira). Se alguém não conseguir colocar, ou depositar em outro dia, toque em ✏️ e ajuste o valor (0 = não colocou) e a data daquele mês.</p>
-      <table><thead><tr><th>Mês</th><th class="v">${U.esc(n('A'))}</th><th class="v">${U.esc(n('B'))}</th><th class="v">Total</th><th></th></tr></thead><tbody>${linhas.map(mm => { const a = aporteMes(mm), fut = mm > U.mesAtual(); return `
+      <table><thead><tr><th>Mês</th>${U.ids().map(k => `<th class="v">${U.esc(n(k))}</th>`).join('')}<th class="v">Total</th><th></th></tr></thead><tbody>${linhas.map(mm => { const a = aporteMes(mm); return `
         <tr><td>${U.mesNome(mm)}${a.alterado ? ' <span class="chip ambos">alterado</span>' : ''}</td>
-        <td class="v">${U.brl(a.A)}<br><span class="sub">${dataCurta(a.dA)}${a.A > 0 && a.dA > hoje ? ' · a cair' : ''}</span></td>
-        <td class="v">${U.brl(a.B)}<br><span class="sub">${dataCurta(a.dB)}${a.B > 0 && a.dB > hoje ? ' · a cair' : ''}</span></td><td class="v">${U.brl(a.A + a.B)}</td>
+        ${U.ids().map(k => `<td class="v">${U.brl(a.v[k])}<br><span class="sub">${dataCurta(a.d[k])}${a.v[k] > 0 && a.d[k] > hoje ? ' · a cair' : ''}</span></td>`).join('')}<td class="v">${U.brl(U.ids().reduce((s, k) => s + a.v[k], 0))}</td>
         <td><button class="mini" data-mes="${mm}" aria-label="Alterar aporte">✏️</button></td></tr>`; }).join('')}</tbody></table></section>`;
 
     el.innerHTML = html;

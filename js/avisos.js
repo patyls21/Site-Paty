@@ -22,8 +22,9 @@ const Avisos = (() => {
     if (!f || iso >= f.vence) return null; // venceu (débito automático): para de avisar
     const { fecha } = U.datasFatura(f.mes); if (iso < fecha) return null;
     const dias = U.diasEntre(iso, f.vence), nome = App.nome(f.e), mes = U.mesNome(f.mes).split(' ')[0].toLowerCase(), v = U.brl(f.valor), quando = dm(f.vence);
-    if (dias <= 1) return { tipo: 'fatura', urgente: true, titulo: '⚠️ Fatura vence amanhã!', texto: `${nome}, a fatura do Inter vence amanhã (${quando}) e você ainda deve ${v}. Pague hoje, é urgente!` };
-    return { tipo: 'fatura', urgente: false, titulo: 'Fatura do Inter fechou 💳', texto: `${nome}, a fatura de ${mes} fechou e você deve ${v}. Vence dia ${quando} (em ${dias} dias).` };
+    const fat = U.daFatura();
+    if (dias <= 1) return { tipo: 'fatura', urgente: true, titulo: '⚠️ Fatura vence amanhã!', texto: `${nome}, a ${fat} vence amanhã (${quando}) e você ainda deve ${v}. Pague hoje, é urgente!` };
+    return { tipo: 'fatura', urgente: false, titulo: (U.banco() ? `Fatura do ${U.banco()}` : 'Fatura do cartão') + ' fechou 💳', texto: `${nome}, a fatura de ${mes} fechou e você deve ${v}. Vence dia ${quando} (em ${dias} dias).` };
   }
 
   // ---------- tudo junto ----------

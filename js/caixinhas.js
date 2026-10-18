@@ -25,10 +25,13 @@
     return Math.pow(1 + p * d, 252) - 1;
   };
   const taxaDia = cx => Math.pow(1 + taxaAno(cx), 1 / 365) - 1;
+  const cls = k => U.ids().indexOf(k) === 0 ? 'a' : U.ids().indexOf(k) === 1 ? 'b' : '';
+  // por pessoa: aporteA / diaA, aporteB / diaB… e, nos meses alterados, { A: valor, dataA: data, B: … }
+  // retorna { v: { A: valor, … }, d: { A: data, … }, alterado }
   const aporteMes = (cx, m) => {
-    const o = (cx.meses || {})[m];
-    const dA = (o && o.dataA) || diaUtil(m, num(cx.diaA, 26)), dB = (o && o.dataB) || diaUtil(m, num(cx.diaB, 26));
-    return o ? { A: o.A, B: o.B, dA, dB, alterado: true } : { A: num(cx.aporteA), B: num(cx.aporteB), dA, dB, alterado: false };
+    const o = (cx.meses || {})[m], v = {}, d = {};
+    U.ids().forEach(k => { d[k] = (o && o['data' + k]) || diaUtil(m, num(cx['dia' + k], 26)); v[k] = o ? num(o[k]) : num(cx['aporte' + k]); });
+    return { v, d, alterado: !!o };
   };
   // saldo estimado em uma data: cada depósito entra na data dele e rende todo dia (bruto, antes do IR).
   // Com saldo real informado (ancora), recomeça dele e só conta os depósitos depois daquela data.
@@ -38,7 +41,7 @@
     const dep = []; let aportado = 0;
     for (let m = ini; m + '-01' <= fim; m = U.mesSoma(m, 1)) {
       const a = aporteMes(cx, m);
-      [[a.dA, a.A], [a.dB, a.B]].forEach(([d, v]) => { if (v > 0 && d <= fim) { aportado += v; dep.push({ d, v }); } });
+      U.ids().forEach(k => { const d = a.d[k], v = a.v[k]; if (v > 0 && d <= fim) { aportado += v; dep.push({ d, v }); } });
     }
     // depósitos avulsos já feitos entram na data em que foram colocados (os "programados" só contam quando marcados como feitos)
     (cx.avulsos || []).forEach(a => { const d = a.feito ? (a.feitoEm || a.data) : ''; if (d && d <= fim) { aportado += a.valor; dep.push({ d, v: a.valor }); } });
@@ -76,45 +79,43 @@
   const salvar = (cx, o) => Store.cofres.set(cx.id, { ...cx, ...o });
 
   function formCaixinha(cx) {
-    const novo = !cx;
-    const v = novo ? { icone: '🐷', aporteA: 0, aporteB: 0, diaA: 26, diaB: 26, inicio: U.mesAtual(), saldoInicial: 0, pct: Store.config.pctCdi, meta: 0, alvo: '' } : cx;
+    const novo = !cx, ids = U.ids();
+    const v = novo ? { icone: '🐷', inicio: U.mesAtual(), saldoInicial: 0, pct: Store.config.pctCdi, meta: 0, alvo: '' } : cx;
+    const vals = { ...v, meta: v.meta ? U.valorInput(v.meta) : '', saldoInicial: U.valorInput(num(v.saldoInicial)), pct: String(v.pct).replace('.', ',') };
+    ids.forEach(k => { vals['aporte' + k] = U.valorInput(num(v['aporte' + k])); vals['dia' + k] = String(num(v['dia' + k], 26)); });
     App.form(novo ? 'Nova caixinha' : 'Editar caixinha', [
       { k: 'nome', rotulo: 'Nome (ex.: Celular novo, Carro, Formatura)', req: true },
       { k: 'icone', rotulo: 'Ícone', tipo: 'select', opcoes: ICONES.map(([i, t]) => [i, `${i} ${t}`]) },
       { k: 'meta', rotulo: 'Meta de valor (R$) — vazio se não tiver', inputmode: 'decimal' },
       { k: 'alvo', rotulo: 'Até quando quer juntar (opcional)', tipo: 'date' },
-      { k: 'aporteA', rotulo: `Aporte mensal de ${n('A')} (R$)`, inputmode: 'decimal', req: true },
-      { k: 'diaA', rotulo: `Dia do depósito de ${n('A')} (1 a 31)`, tipo: 'number', req: true, dica: 'Se cair no fim de semana, vale a segunda-feira.' },
-      { k: 'aporteB', rotulo: `Aporte mensal de ${n('B')} (R$)`, inputmode: 'decimal', req: true },
-      { k: 'diaB', rotulo: `Dia do depósito de ${n('B')} (1 a 31)`, tipo: 'number', req: true, dica: 'Em um mês diferente, ajuste a data na linha do mês (✏️).' },
+      ...ids.flatMap(k => [
+        { k: 'aporte' + k, rotulo: `Aporte mensal de ${n(k)} (R$)`, inputmode: 'decimal', req: true },
+        { k: 'dia' + k, rotulo: `Dia do depósito de ${n(k)} (1 a 31)`, tipo: 'number', req: true, dica: 'Se cair no fim de semana, vale a segunda-feira. Em um mês diferente, ajuste a data na linha do mês (✏️).' }]),
       { k: 'inicio', rotulo: 'Mês em que começou a contar', tipo: 'month', req: true },
       { k: 'saldoInicial', rotulo: 'Quanto já tinha nesse mês, antes do aporte (R$)', inputmode: 'decimal', req: true },
       { k: 'pct', rotulo: 'Rende quantos % do CDI? (0 se não rende)', inputmode: 'decimal', req: true, dica: `CDI usado: ${String(Store.config.cdiAnual).replace('.', ',')}% ao ano (muda na aba Viagens › Alterar).` }
-    ], {
-      ...v, meta: v.meta ? U.valorInput(v.meta) : '', aporteA: U.valorInput(num(v.aporteA)), aporteB: U.valorInput(num(v.aporteB)),
-      diaA: String(num(v.diaA, 26)), diaB: String(num(v.diaB, 26)), saldoInicial: U.valorInput(num(v.saldoInicial)), pct: String(v.pct).replace('.', ',')
-    }, f => {
-      const meta = f.meta.trim() ? U.parseValor(f.meta) : 0, A = U.parseValor(f.aporteA), B = U.parseValor(f.aporteB), saldo = U.parseValor(f.saldoInicial);
+    ], vals, f => {
+      const meta = f.meta.trim() ? U.parseValor(f.meta) : 0, aps = ids.map(k => U.parseValor(f['aporte' + k])), saldo = U.parseValor(f.saldoInicial);
       const pct = Number(String(f.pct).replace(',', '.'));
-      if (![meta, A, B, saldo].every(x => x >= 0) || !(pct >= 0) || !/^\d{4}-\d{2}$/.test(f.inicio)) { alert('Confira os valores.'); return false; }
-      const dia = x => Math.min(31, Math.max(1, parseInt(x, 10) || 26));
-      const o = { nome: f.nome.trim(), icone: f.icone, meta, alvo: f.alvo || '', aporteA: A, aporteB: B, diaA: dia(f.diaA), diaB: dia(f.diaB), inicio: f.inicio, saldoInicial: saldo, pct };
+      if (![meta, ...aps, saldo].every(x => x >= 0) || !(pct >= 0) || !/^\d{4}-\d{2}$/.test(f.inicio)) { alert('Confira os valores.'); return false; }
+      const dia = x => Math.min(31, Math.max(1, parseInt(x, 10) || 26)), porPessoa = {};
+      ids.forEach((k, i) => { porPessoa['aporte' + k] = aps[i]; porPessoa['dia' + k] = dia(f['dia' + k]); });
+      const o = { nome: f.nome.trim(), icone: f.icone, meta, alvo: f.alvo || '', ...porPessoa, inicio: f.inicio, saldoInicial: saldo, pct };
       if (novo) { const c = Store.cofres.add({ ...o, meses: {}, ancoraData: '', ancoraSaldo: 0, concluida: false }); location.hash = 'caixinhas/' + c.id; }
       else salvar(cx, o);
     });
   }
 
   function formMes(cx, m) {
-    const a = aporteMes(cx, m);
-    App.form('Aporte de ' + U.mesNome(m), [
-      { k: 'A', rotulo: `${n('A')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
-      { k: 'dataA', rotulo: `Data do depósito de ${n('A')}`, tipo: 'date', req: true },
-      { k: 'B', rotulo: `${n('B')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
-      { k: 'dataB', rotulo: `Data do depósito de ${n('B')}`, tipo: 'date', req: true }
-    ], { A: U.valorInput(a.A), B: U.valorInput(a.B), dataA: a.dA, dataB: a.dB }, f => {
-      const A = U.parseValor(f.A), B = U.parseValor(f.B);
-      if (!(A >= 0) || !(B >= 0)) { alert('Valor inválido.'); return false; }
-      salvar(cx, { meses: { ...(cx.meses || {}), [m]: { A, B, dataA: f.dataA, dataB: f.dataB } } });
+    const a = aporteMes(cx, m), ids = U.ids(), vals = {};
+    ids.forEach(k => { vals[k] = U.valorInput(a.v[k]); vals['data' + k] = a.d[k]; });
+    App.form('Aporte de ' + U.mesNome(m), ids.flatMap(k => [
+      { k, rotulo: `${n(k)} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
+      { k: 'data' + k, rotulo: `Data do depósito de ${n(k)}`, tipo: 'date', req: true }
+    ]), vals, f => {
+      const o = {};
+      for (const k of ids) { const v = U.parseValor(f[k]); if (!(v >= 0)) { alert('Valor inválido.'); return false; } o[k] = v; o['data' + k] = f['data' + k]; }
+      salvar(cx, { meses: { ...(cx.meses || {}), [m]: o } });
     }, a.alterado ? { rotulo: '↩ Voltar ao padrão', fn: () => { const meses = { ...cx.meses }; delete meses[m]; salvar(cx, { meses }); } } : null);
   }
 
@@ -122,11 +123,11 @@
   const faltaDe = (cx, k) => (cx.avulsos || []).filter(a => !a.feito && a.quem === k).reduce((s, a) => s + a.valor, 0);
   function formAvulso(cx, av) {
     App.form(av ? 'Editar depósito avulso' : 'Depósito avulso', [
-      { k: 'quem', rotulo: 'Quem coloca', tipo: 'select', opcoes: [['A', n('A')], ['B', n('B')]] },
+      { k: 'quem', rotulo: 'Quem coloca', tipo: 'select', opcoes: U.ids().map(k => [k, n(k)]) },
       { k: 'valor', rotulo: 'Valor (R$)', inputmode: 'decimal', req: true },
       { k: 'data', rotulo: 'Data (em que colocou ou em que vai colocar)', tipo: 'date', req: true },
       { k: 'situacao', rotulo: 'Situação', tipo: 'select', opcoes: [['prog', 'Ainda vou colocar (avisar no dia)'], ['feito', 'Já coloquei']] }
-    ], av ? { quem: av.quem, valor: U.valorInput(av.valor), data: av.data, situacao: av.feito ? 'feito' : 'prog' } : { quem: App.eu() || 'A', data: U.hoje(), situacao: 'prog' }, f => {
+    ], av ? { quem: av.quem, valor: U.valorInput(av.valor), data: av.data, situacao: av.feito ? 'feito' : 'prog' } : { quem: App.eu() || U.ids()[0], data: U.hoje(), situacao: 'prog' }, f => {
       const valor = U.parseValor(f.valor);
       if (!(valor > 0)) { alert('Valor inválido.'); return false; }
       const feito = f.situacao === 'feito';
@@ -183,9 +184,9 @@
         <div class="card ok"><small>${U.esc(cx.icone || '🐷')} Na caixinha agora</small><strong>${U.brl(caixa)}</strong></div>
         <div class="card"><small>Colocado até hoje</small><strong>${U.brl(num(cx.saldoInicial) + ag.aportado)}</strong></div>
         <div class="card a"><small>Rendimento estimado</small><strong>${U.brl(ag.rendimento)}</strong></div>
-        ${['A', 'B'].map(k => faltaDe(cx, k) > 0 ? `<div class="card ${k === 'A' ? 'a' : 'b'}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(faltaDe(cx, k))}</strong></div>` : '').join('')}
+        ${U.ids().map(k => faltaDe(cx, k) > 0 ? `<div class="card ${cls(k)}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(faltaDe(cx, k))}</strong></div>` : '').join('')}
       </div>
-      <p class="sub">Aporte padrão: <b>${U.esc(n('A'))}</b> ${U.brl(num(cx.aporteA))} (dia ${num(cx.diaA, 26)}) · <b>${U.esc(n('B'))}</b> ${U.brl(num(cx.aporteB))} (dia ${num(cx.diaB, 26)}).
+      <p class="sub">Aporte padrão: ${U.ids().map(k => `<b>${U.esc(n(k))}</b> ${U.brl(num(cx['aporte' + k]))} (dia ${num(cx['dia' + k], 26)})`).join(' · ')}.
         ${num(cx.pct) > 0 ? `Rendendo ${String(cx.pct).replace('.', ',')}% do CDI (${(taxaAno(cx) * 100).toFixed(2).replace('.', ',')}% ao ano, bruto estimado).` : 'Sem rendimento.'}
         ${cx.ancoraData ? `Saldo ajustado pelo valor real de ${dm(cx.ancoraData)} (${U.brl(num(cx.ancoraSaldo))}).` : 'Valor estimado: confira com o app do banco e atualize.'}
         <button class="btn mini-b" id="c-real">Atualizar com o saldo real</button></p>`;
@@ -195,7 +196,8 @@
       let porMes = '';
       if (cx.alvo && cx.alvo > hoje && falta > 0) {
         const [y1, m1] = U.mesAtual().split('-').map(Number), [y2, m2] = cx.alvo.slice(0, 7).split('-').map(Number), meses = Math.max(1, (y2 - y1) * 12 + (m2 - m1));
-        porMes = `<div class="cards"><div class="card ok"><small>Colocar por mês (casal)</small><strong>${U.brl(Math.ceil(falta / meses))}</strong></div><div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(falta / meses / 2))}</strong></div><div class="card"><small>Meses até ${dm(cx.alvo)}</small><strong>${meses}</strong></div></div>`;
+        const np = U.ids().length;
+        porMes = `<div class="cards"><div class="card ok"><small>Colocar por mês (${np > 1 ? 'todos' : 'total'})</small><strong>${U.brl(Math.ceil(falta / meses))}</strong></div>${np > 1 ? `<div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(falta / meses / np))}</strong></div>` : ''}<div class="card"><small>Meses até ${dm(cx.alvo)}</small><strong>${meses}</strong></div></div>`;
       }
       html += `
       <section class="bloco"><h2>🎯 Meta de ${U.brl(meta)}</h2>
@@ -225,10 +227,9 @@
     for (let mm = cx.inicio || U.mesAtual(); mm <= ultimo; mm = U.mesSoma(mm, 1)) linhas.push(mm);
     html += `<section class="bloco"><h2>Aportes mês a mês</h2>
       <p class="sub">Por padrão entra o valor combinado no dia de cada um (fim de semana vira segunda-feira). Se alguém não conseguir colocar, ou depositar em outro dia, toque em ✏️ e ajuste o valor (0 = não colocou) e a data daquele mês.</p>
-      <table><thead><tr><th>Mês</th><th class="v">${U.esc(n('A'))}</th><th class="v">${U.esc(n('B'))}</th><th class="v">Total</th><th></th></tr></thead><tbody>${linhas.map(mm => { const a = aporteMes(cx, mm); return `
+      <table><thead><tr><th>Mês</th>${U.ids().map(k => `<th class="v">${U.esc(n(k))}</th>`).join('')}<th class="v">Total</th><th></th></tr></thead><tbody>${linhas.map(mm => { const a = aporteMes(cx, mm); return `
         <tr><td>${U.mesNome(mm)}${a.alterado ? ' <span class="chip ambos">alterado</span>' : ''}</td>
-        <td class="v">${U.brl(a.A)}<br><span class="sub">${dataCurta(a.dA)}${a.A > 0 && a.dA > hoje ? ' · a cair' : ''}</span></td>
-        <td class="v">${U.brl(a.B)}<br><span class="sub">${dataCurta(a.dB)}${a.B > 0 && a.dB > hoje ? ' · a cair' : ''}</span></td><td class="v">${U.brl(a.A + a.B)}</td>
+        ${U.ids().map(k => `<td class="v">${U.brl(a.v[k])}<br><span class="sub">${dataCurta(a.d[k])}${a.v[k] > 0 && a.d[k] > hoje ? ' · a cair' : ''}</span></td>`).join('')}<td class="v">${U.brl(U.ids().reduce((s, k) => s + a.v[k], 0))}</td>
         <td><button class="mini" data-mes="${mm}" aria-label="Alterar aporte">✏️</button></td></tr>`; }).join('')}</tbody></table></section>
       <div class="filtros"><button class="btn sec" id="c-edit">Editar caixinha</button><button class="btn sec" id="c-fim">${cx.concluida ? 'Reabrir' : 'Marcar como concluída'}</button><button class="btn sec" id="c-del">Excluir</button></div>`;
 
@@ -251,8 +252,9 @@
       tipo: 'caixinha', urgente: false, titulo: `🐷 Hoje é dia de colocar na caixinha!`, texto: `${n(quem)}, coloque ${U.brl(a.valor)} na caixinha "${cx.nome}" hoje.` }))),
     // quanto ainda está marcado para colocar na caixinha (depósitos avulsos "a colocar"), por pessoa
     programado: id => {
-      const c = Store.cofres.lista().find(x => x.id === id), r = { A: 0, B: 0, total: 0, data: { A: '', B: '' } };
-      (c && c.avulsos || []).forEach(a => { if (!a.feito) { r[a.quem] += a.valor; r.total += a.valor; if (!r.data[a.quem] || a.data < r.data[a.quem]) r.data[a.quem] = a.data; } });
+      const c = Store.cofres.lista().find(x => x.id === id), r = { total: 0, data: {} };
+      U.ids().forEach(k => { r[k] = 0; r.data[k] = ''; });
+      (c && c.avulsos || []).forEach(a => { if (!a.feito && a.quem in r.data) { r[a.quem] += a.valor; r.total += a.valor; if (!r.data[a.quem] || a.data < r.data[a.quem]) r.data[a.quem] = a.data; } });
       return r;
     },
     ultimoDia: () => Store.cofres.lista().flatMap(cx => (cx.avulsos || []).filter(a => !a.feito).map(a => a.data)).reduce((u, d) => d > u ? d : u, ''),

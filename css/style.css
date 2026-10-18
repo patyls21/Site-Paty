@@ -210,3 +210,14 @@ dialog{max-width:94vw;overflow-x:hidden}
 .viagem-pct b{font-size:1.5rem}
 .viagem-pct span{font-size:.7rem;color:var(--muted)}
 @media (max-width:640px){.viagem-grade{grid-template-columns:1fr;justify-items:center}}
+
+/* ---- várias pessoas / várias contas ---- */
+.checks{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:0;display:grid;gap:6px;min-width:0}
+.checks legend{font-size:.82rem;font-weight:700;color:var(--muted);padding:0 4px}
+dialog label.chk{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--text);font-size:.9rem}
+dialog .chk input{width:auto;min-width:0}
+#conta-barra{display:flex;justify-content:flex-end;margin:10px 16px 0}
+#conta-barra[hidden]{display:none}
+#conta-barra label{display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:700;color:var(--muted)}
+#conta-barra select{min-height:36px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font:600 .85rem var(--fonte);padding:0 8px;max-width:60vw}
+#nova-conta[hidden]{display:none}

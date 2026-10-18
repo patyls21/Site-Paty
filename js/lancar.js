@@ -1,12 +1,12 @@
 // Fluxo de lançamento: novo gasto, pagar a minha parte (com comprovante), pendências e compartilhar do banco.
 const Lancar = (() => {
-  const FORMAS = [['pix', 'Pix'], ['inter', 'Cartão Inter'], ['dinheiro', 'Dinheiro'], ['debito', 'Débito'], ['credito', 'Crédito'], ['outro', 'Outro']];
+  const FORMAS = () => [['pix', 'Pix'], ['inter', U.cartao()], ['dinheiro', 'Dinheiro'], ['debito', 'Débito'], ['credito', 'Crédito'], ['outro', 'Outro']];
   const ACEITA = 'image/*,application/pdf';
   const n = k => App.nome(k);
   const dlg = () => App.$('#dlg');
   const gastoPorId = id => Store.gastos.lista().find(g => g.id === id);
-  const nomeForma = v => (FORMAS.find(f => f[0] === v) || [, v])[1];
-  const rotuloDiv = g => g.pessoa === 'meio' || g.pessoa === 'ambos' ? 'meio a meio' : 'só ' + n(g.pessoa);
+  const nomeForma = v => (FORMAS().find(f => f[0] === v) || [, v])[1];
+  const rotuloDiv = g => { const r = App.rotuloDiv(g.pessoa); return r === 'Todos' ? 'todos' : r.charAt(0).toLowerCase() + r.slice(1); };
 
   // gastoIds (opcional): um mesmo comprovante que vale para vários gastos (um Pix só pagando tudo)
   async function anexar(arquivo, g, pessoa, gastoIds) {
@@ -21,28 +21,29 @@ const Lancar = (() => {
   // ---------- novo gasto ----------
   async function novoGasto(op = {}) {
     const e = await App.pedirEu(); if (!e) return;
-    const o = App.outro(e);
+    const outros = App.outros(e);
     App.form('Novo gasto', [
       { k: 'descricao', rotulo: 'O que foi', req: true },
       { k: 'valor', rotulo: 'Valor total (R$)', inputmode: 'decimal', req: true },
       { k: 'data', rotulo: 'Data', tipo: 'date', req: true },
       { k: 'categoria', rotulo: 'Categoria', tipo: 'select', opcoes: Store.categorias.map(c => [c, c]) },
-      { k: 'forma', rotulo: 'Foi pago em', tipo: 'select', opcoes: FORMAS },
-      { k: 'pessoa', rotulo: 'Dividir entre', tipo: 'select', opcoes: [['meio', 'Meio a meio'], [e, 'Só eu'], [o, 'Só ' + n(o)]] },
+      { k: 'forma', rotulo: 'Foi pago em', tipo: 'select', opcoes: FORMAS() },
+      { k: 'pessoa', rotulo: 'Dividir entre', tipo: 'checks', opcoes: U.ids().map(i => [i, i === e ? n(i) + ' (eu)' : n(i)]), dica: 'Marque quem participa do gasto: o valor é dividido igualmente entre os marcados.' },
       { k: 'situacao', rotulo: 'Quem pagou agora?', tipo: 'select', opcoes: [
-        ['eu_tudo', `Eu paguei o valor todo (${n(o)} me deve a parte dele)`],
+        ['eu_tudo', outros.length === 1 ? `Eu paguei o valor todo (${n(outros[0])} me deve a parte)` : 'Eu paguei o valor todo (os outros me devem a parte de cada um)'],
         ['eu_parte', 'Paguei só a minha parte (cada um paga a sua)'],
-        ['outro_tudo', `${n(o)} pagou o valor todo (eu devo a minha parte)`],
+        ...outros.map(o => ['tudo:' + o, `${n(o)} pagou o valor todo (eu devo a minha parte)`]),
         ['ninguem', 'Ainda ninguém pagou']] },
       { k: 'comp', rotulo: 'Comprovante de quem pagou (opcional)', tipo: 'file', accept: ACEITA, dica: op.arquivo ? `Comprovante recebido: ${op.arquivo.name}` : 'Imagem ou PDF. Dá para anexar depois também.' }
     ], { data: U.hoje(), forma: 'inter', pessoa: 'meio', situacao: 'eu_tudo', categoria: Store.categorias[0] }, async f => {
       const valor = U.parseValor(f.valor);
       if (!(valor > 0)) { alert('Valor inválido.'); return false; }
-      const pag = { A: { pago: false }, B: { pago: false } };
+      if (!f.pessoa) { alert('Marque pelo menos uma pessoa em "Dividir entre".'); return false; }
+      const pag = {}; U.ids().forEach(i => pag[i] = { pago: false });
       let adiantou = '', quem = e;
       if (f.situacao === 'eu_tudo') { adiantou = e; pag[e] = { pago: true, data: f.data }; }
       else if (f.situacao === 'eu_parte') pag[e] = { pago: true, data: f.data };
-      else if (f.situacao === 'outro_tudo') { adiantou = o; quem = o; pag[o] = { pago: true, data: f.data }; }
+      else if (f.situacao.startsWith('tudo:')) { const o = f.situacao.slice(5); adiantou = o; quem = o; pag[o] = { pago: true, data: f.data }; }
       const g = Store.gastos.add({ data: f.data, descricao: f.descricao.trim(), valor, categoria: f.categoria, pessoa: f.pessoa, forma: f.forma, mes: U.mesDe(f.data), pag, adiantou, criadoPor: e });
       const arq = (f.comp && f.comp.size) ? f.comp : op.arquivo;
       if (arq && f.situacao !== 'ninguem') {
@@ -87,7 +88,7 @@ const Lancar = (() => {
   // todos os comprovantes ligados a um gasto (de qualquer pessoa)
   function compsDoGasto(g) {
     const ids = new Set();
-    ['A', 'B'].forEach(p => ((g.pag && g.pag[p] && g.pag[p].comps) || []).forEach(i => ids.add(i)));
+    Object.keys(g.pag || {}).forEach(p => ((g.pag[p] && g.pag[p].comps) || []).forEach(i => ids.add(i)));
     Store.comprovantes.lista().forEach(c => { if (c.gastoId === g.id) ids.add(c.id); });
     return [...ids].map(i => Store.comprovantes.lista().find(c => c.id === i)).filter(Boolean);
   }
@@ -157,7 +158,7 @@ const Lancar = (() => {
     abrir(`<h3>${U.esc(g.descricao)}</h3><div style="padding:12px 16px 16px;display:grid;gap:10px">
       <p class="sub" style="margin:0">${U.dataBR(g.data)} · ${nomeForma(g.forma)} · ${U.esc(g.categoria)} · dividido ${rotuloDiv(g)}</p>
       <div class="cards" style="margin:0"><div class="card"><small>Total</small><strong>${U.brl(g.valor)}</strong></div></div>
-      ${g.pag ? `<table><thead><tr><th>Quem</th><th class="v">Parte</th><th>Situação</th><th></th></tr></thead><tbody>${linha('A')}${linha('B')}</tbody></table>`
+      ${g.pag ? `<table><thead><tr><th>Quem</th><th class="v">Parte</th><th>Situação</th><th></th></tr></thead><tbody>${U.ids().filter(p => U.parteDe(g, p) > 0 || g.adiantou === p).map(linha).join('')}</tbody></table>`
         : '<p class="sub">Este gasto foi lançado antes do controle de pagamento das partes.</p>'}
       <div class="acoes">${App.editarGasto ? '<button type="button" class="btn sec" id="d-edit">Editar</button>' : ''}<button type="button" class="btn" data-fechar>Fechar</button></div></div>`, d => {
       const ed = d.querySelector('#d-edit'); if (ed) ed.onclick = () => { d.close(); App.editarGasto(g.id); };
@@ -191,13 +192,13 @@ const Lancar = (() => {
   }
 
   const mesCurto = m => U.mesNome(m).split(' ')[0];
-  const rotuloCredor = c => c === 'INTER' ? '💳 Fatura do Inter' : (c === 'A' || c === 'B') ? `💸 Pix para ${n(c)}` : '📦 Outros (pagamento direto)';
+  const rotuloCredor = c => c === 'INTER' ? '💳 ' + U.daFatura().replace(/^./, s => s.toUpperCase()) : U.ids().includes(c) ? `💸 Pix para ${n(c)}` : '📦 Outros (pagamento direto)';
 
-  // pendências dos dois, com total, agrupadas por para quem se paga; usada também ao receber um comprovante compartilhado
+  // pendências de todos, com total, agrupadas por para quem se paga; usada também ao receber um comprovante compartilhado
   async function pendencias(arquivo) {
     const e = await App.pedirEu(); if (!e) return;
-    const o = App.outro(e), P = U.pendencias(Store.gastos.lista());
-    const ordem = ['INTER', 'A', 'B', 'OUTRO'];
+    const outros = App.outros(e), P = U.pendencias(Store.gastos.lista());
+    const ordem = ['INTER', ...U.ids(), 'OUTRO'];
     // grupos conhecidos na ordem certa; qualquer outro que apareça também é mostrado (nunca some dinheiro da lista)
     const credores = k => [...ordem.filter(c => P[k].grupos[c]), ...Object.keys(P[k].grupos).filter(c => !ordem.includes(c))];
     // opções de pagamento de cada grupo. Fatura do Inter: a que acabou de fechar, só a próxima, ou tudo que se deve
@@ -208,7 +209,7 @@ const Lancar = (() => {
       const fech = U.mesFaturaFechada(), prox = U.mesSoma(fech, 1), doMes = m => gr.itens.filter(g => U.mesFatura(g.data) === m);
       const o = [{ id: 'fech', rot: `Pagar fatura de ${mesCurto(fech)}`, itens: doMes(fech) }, { id: 'prox', rot: `Pagar só a próxima (${mesCurto(prox)})`, itens: doMes(prox) }]
         .filter(x => x.itens.length);
-      if (!o.some(x => x.itens.length === gr.itens.length)) o.push({ id: 'tudo', rot: 'Pagar tudo do Inter', itens: gr.itens });
+      if (!o.some(x => x.itens.length === gr.itens.length)) o.push({ id: 'tudo', rot: U.banco() ? `Pagar tudo do ${U.banco()}` : 'Pagar tudo do cartão', itens: gr.itens });
       return o.map(x => ({ ...x, total: soma(x.itens) }));
     };
     const bloco = k => credores(k).map(c => {
@@ -227,11 +228,11 @@ const Lancar = (() => {
       ${arquivo ? `<p class="sub" style="margin:0">Comprovante recebido: <b>${U.esc(arquivo.name)}</b>. Escolha o que ele paga.</p>` : ''}
       <div class="cards" style="margin:0 0 4px">
         <div class="card a"><small>Você deve</small><strong>${U.brl(P[e].total)}</strong></div>
-        <div class="card b"><small>${U.esc(n(o))} deve</small><strong>${U.brl(P[o].total)}</strong></div>
+        ${outros.map((o, i) => `<div class="card ${i === 0 ? 'b' : ''}"><small>${U.esc(n(o))} deve</small><strong>${U.brl(P[o].total)}</strong></div>`).join('')}
       </div>
-      ${P[e].total || P[o].total ? '' : '<div class="vazio">Ninguém deve nada 💜</div>'}
+      ${P[e].total || outros.some(o => P[o].total) ? '' : '<div class="vazio">Ninguém deve nada 💜</div>'}
       ${P[e].total ? `<h4 class="sec-t">Você deve</h4>${bloco(e)}` : ''}
-      ${P[o].total ? `<h4 class="sec-t">${U.esc(n(o))} deve</h4>${bloco(o)}` : ''}
+      ${outros.filter(o => P[o].total).map(o => `<h4 class="sec-t">${U.esc(n(o))} deve</h4>${bloco(o)}`).join('')}
       <div class="acoes">${arquivo ? '<button type="button" class="btn sec" id="p-novo">Criar novo gasto com este comprovante</button>' : ''}<button type="button" class="btn" data-fechar>Fechar</button></div></div>`, d => {
       d.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { d.close(); pagarParte(gastoPorId(b.dataset.g), arquivo, e); });
       d.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
@@ -283,9 +284,9 @@ const Lancar = (() => {
     const e = App.eu(), gastos = Store.gastos.lista();
     const minhas = e ? gastos.filter(g => U.pendente(g, e)) : [];
     const totalMinhas = minhas.reduce((s, g) => s + U.parteDe(g, e), 0);
-    const P = U.pendencias(gastos);
-    const frase = (!P.A.total && !P.B.total) ? (gastos.some(g => g.pag) ? 'Tudo pago 💜' : '')
-      : ['A', 'B'].filter(k => P[k].total > 0).map(k => `${n(k)} deve ${U.brl(P[k].total)}`).join(' · ');
+    const P = U.pendencias(gastos), ids = U.ids(), devendo = ids.filter(k => P[k].total > 0);
+    const frase = !devendo.length ? (gastos.some(g => g.pag) ? 'Tudo pago 💜' : '')
+      : devendo.map(k => `${n(k)} deve ${U.brl(P[k].total)}`).join(' · ');
     const recentes = gastos.slice().sort((a, b) => (b.data + b.id).localeCompare(a.data + a.id)).slice(0, 6);
     el.innerHTML = `
       <div class="tiles">
@@ -294,12 +295,12 @@ const Lancar = (() => {
         <label class="tile tile-largo" id="t-comp"><i>📎</i><b>Tenho um comprovante</b><span>Escolha o print ou PDF na galeria e diga a que gasto ele pertence.</span>
           <input type="file" id="t-arq" accept="image/*,application/pdf" hidden></label>
       </div>
-      ${frase ? `<div class="acerto">${U.esc(frase)}${P.A.total || P.B.total ? '<br><button class="btn sec" id="b-pend2" style="margin-top:6px">Ver / pagar pendências</button>' : ''}</div>` : ''}
-      ${e ? `<p class="sub">Você está usando como <b>${U.esc(n(e))}</b>. <a href="#" id="trocar-eu">Não sou eu</a></p>` : ''}
+      ${frase ? `<div class="acerto">${U.esc(frase)}${devendo.length ? '<br><button class="btn sec" id="b-pend2" style="margin-top:6px">Ver / pagar pendências</button>' : ''}</div>` : ''}
+      ${e ? `<p class="sub">Você está usando como <b>${U.esc(n(e))}</b>.${Store.nuvem ? '' : ' <a href="#" id="trocar-eu">Não sou eu</a>'}</p>` : ''}
       <h2 class="titulo-sec">Últimos lançamentos</h2>
       ${recentes.length ? recentes.map(g => `<div class="pend" data-g="${g.id}" role="button" tabindex="0">
         <div><b>${U.esc(g.descricao)}</b><br><span class="sub">${U.dataBR(g.data)} · ${nomeForma(g.forma)} · ${rotuloDiv(g)}</span></div>
-        <div style="text-align:right"><b>${U.brl(g.valor)}</b>${compsDoGasto(g).length ? ` <button type="button" class="olho" data-v="${g.id}" aria-label="Ver comprovante" title="Ver comprovante">👁</button>` : ''}<br>${g.pag ? ['A', 'B'].filter(p => U.parteDe(g, p) > 0).map(p => `<span class="chip ${U.pendente(g, p) ? 'ambos' : 'ok'}">${U.pendente(g, p) ? '⏳' : '✔'} ${U.esc(n(p))}</span>`).join(' ') : ''}</div></div>`).join('')
+        <div style="text-align:right"><b>${U.brl(g.valor)}</b>${compsDoGasto(g).length ? ` <button type="button" class="olho" data-v="${g.id}" aria-label="Ver comprovante" title="Ver comprovante">👁</button>` : ''}<br>${g.pag ? ids.filter(p => U.parteDe(g, p) > 0).map(p => `<span class="chip ${U.pendente(g, p) ? 'ambos' : 'ok'}">${U.pendente(g, p) ? '⏳' : '✔'} ${U.esc(n(p))}</span>`).join(' ') : ''}</div></div>`).join('')
         : '<div class="vazio">Nenhum gasto ainda. Toque em <b>Novo gasto</b> 💜</div>'}
       ${document.body.classList.contains('solo') ? '' : '<p class="sub" style="margin-top:14px">📱 No celular, use a <a href="formulario.html" style="color:var(--realce)">página só do formulário</a>: dá para instalar como app e receber comprovantes do banco.</p>'}`;
     App.$('#t-novo').onclick = () => novoGasto();
