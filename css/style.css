@@ -221,3 +221,7 @@ dialog .chk input{width:auto;min-width:0}
 #conta-barra label{display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:700;color:var(--muted)}
 #conta-barra select{min-height:36px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font:600 .85rem var(--fonte);padding:0 8px;max-width:60vw}
 #nova-conta[hidden]{display:none}
+
+.brand img{width:28px;height:28px;border-radius:7px;flex:none}
+.f-brand{display:flex;align-items:center;gap:8px}
+.f-brand img{border-radius:6px}
