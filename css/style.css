@@ -202,3 +202,11 @@ dialog form{grid-template-columns:minmax(0,1fr)}
 dialog label{min-width:0}
 dialog input,dialog select{width:100%;min-width:0;box-sizing:border-box;text-overflow:ellipsis}
 dialog{max-width:94vw;overflow-x:hidden}
+
+/* viagens */
+.viagem-grade{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center;margin-bottom:12px}
+.viagem-graf{position:relative;width:170px;height:170px}
+.viagem-pct{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.viagem-pct b{font-size:1.5rem}
+.viagem-pct span{font-size:.7rem;color:var(--muted)}
+@media (max-width:640px){.viagem-grade{grid-template-columns:1fr;justify-items:center}}

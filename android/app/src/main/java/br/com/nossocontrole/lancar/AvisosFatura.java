@@ -41,16 +41,22 @@ final class AvisosFatura {
             Calendar h = Calendar.getInstance();
             String hoje = String.format(java.util.Locale.US, "%04d-%02d-%02d", h.get(Calendar.YEAR), h.get(Calendar.MONTH) + 1, h.get(Calendar.DAY_OF_MONTH));
             if (hoje.equals(sp.getString("ultimo", "")) || System.currentTimeMillis() < momento(hoje)) return;
-            JSONArray plano = new JSONArray(sp.getString("plano", "[]"));
-            for (int i = 0; i < plano.length(); i++) {
-                JSONObject o = plano.getJSONObject(i);
-                if (hoje.equals(o.getString("data"))) {
-                    sp.edit().putString("ultimo", hoje).apply();
-                    mostrar(c, o.getString("titulo"), o.getString("texto"));
-                    return;
-                }
-            }
+            mostrarDoDia(c, hoje);
         } catch (Exception ignorado) { }
+    }
+
+    /** Mostra todos os avisos do plano marcados para o dia (fatura e viagem podem cair juntos). */
+    private static void mostrarDoDia(Context c, String dia) throws Exception {
+        SharedPreferences sp = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        JSONArray plano = new JSONArray(sp.getString("plano", "[]"));
+        int id = 0;
+        for (int i = 0; i < plano.length(); i++) {
+            JSONObject o = plano.getJSONObject(i);
+            if (dia.equals(o.getString("data"))) {
+                if (id == 0) sp.edit().putString("ultimo", dia).apply();
+                mostrar(c, id++, o.getString("titulo"), o.getString("texto"));
+            }
+        }
     }
 
     /** Agenda o próximo aviso do plano que ainda está no futuro (ou cancela, se não sobrou nenhum). */
@@ -74,22 +80,18 @@ final class AvisosFatura {
     /** Chamado pelo alarme: mostra o aviso do dia (se ainda estiver no plano) e agenda o seguinte. */
     static void disparar(Context c, String dia) {
         try {
-            JSONArray plano = new JSONArray(c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("plano", "[]"));
-            for (int i = 0; i < plano.length(); i++) {
-                JSONObject o = plano.getJSONObject(i);
-                if (dia.equals(o.getString("data"))) { c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("ultimo", dia).apply(); mostrar(c, o.getString("titulo"), o.getString("texto")); break; }
-            }
+            mostrarDoDia(c, dia);
         } catch (Exception ignorado) { }
         reagendar(c);
     }
 
-    private static void mostrar(Context c, String titulo, String texto) {
+    private static void mostrar(Context c, int id, String titulo, String texto) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
         if (Build.VERSION.SDK_INT >= 26) {
             nm.createNotificationChannel(new NotificationChannel(CANAL, "Fatura do cartão", NotificationManager.IMPORTANCE_HIGH));
         }
-        PendingIntent abrir = PendingIntent.getActivity(c, 1, new Intent(c, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent abrir = PendingIntent.getActivity(c, 1 + id, new Intent(c, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, CANAL) : new Notification.Builder(c);
         b.setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(titulo)
@@ -97,7 +99,7 @@ final class AvisosFatura {
                 .setStyle(new Notification.BigTextStyle().bigText(texto))
                 .setContentIntent(abrir)
                 .setAutoCancel(true);
-        nm.notify(1001, b.build());
+        nm.notify(1001 + id, b.build());
     }
 
     private static PendingIntent intencao(Context c, String dia) {

@@ -2,11 +2,13 @@
 // A interface é síncrona: a nuvem é carregada para a memória no login e cada alteração é enviada em seguida.
 const Store = (() => {
   const KEY = 'nosso-controle-v1';
-  const COLS = ['gastos', 'inter', 'acertos', 'comprovantes', 'fixos', 'futuros', 'pontos', 'viagens', 'pix'];
+  const COLS = ['gastos', 'inter', 'acertos', 'comprovantes', 'fixos', 'futuros', 'pontos', 'viagens', 'pix', 'caixinha', 'metas'];
   const padrao = () => ({
-    config: { nomeA: 'Patrícia', nomeB: 'Namorado', acrescimoFuturo: 0, reaisPorPonto: 2.5, conversao: 1, bonus: 100, diaFechamento: 16, diaVencimento: 22 },
+    config: { nomeA: 'Patrícia', nomeB: 'Namorado', acrescimoFuturo: 0, reaisPorPonto: 2.5, conversao: 1, bonus: 100, diaFechamento: 16, diaVencimento: 22,
+      // caixinha de viagens (valores em centavos): aporte mensal de cada um, saldo ao começar a contar, rendimento (% do CDI)
+      viagemAporteA: 30000, viagemAporteB: 30000, viagemSaldoInicial: 0, viagemInicio: '', cdiAnual: 14.15, pctCdi: 120, viagemMetaAtiva: '' },
     categorias: ['iFood', 'Streaming', 'Duo Gourmet', 'Render (guardado)', 'Mercado', 'Transporte', 'Lazer', 'Casa', 'Saúde', 'Compras', 'Contas', 'Outros'],
-    gastos: [], inter: [], faturas: {}, acertos: [], comprovantes: [], fixos: [], futuros: [], pontos: [], viagens: [], pix: []
+    gastos: [], inter: [], faturas: {}, acertos: [], comprovantes: [], fixos: [], futuros: [], pontos: [], viagens: [], pix: [], caixinha: [], metas: []
   });
   const normalizar = o => {
     const x = Object.assign(padrao(), o);
@@ -90,7 +92,7 @@ const Store = (() => {
     setConfig(c) { d.config = { ...d.config, ...c }; sb ? enviarConfig() : salvarLocal(); avisar(); },
     setCategorias(l) { d.categorias = l; sb ? enviarConfig() : salvarLocal(); avisar(); },
     gastos: col('gastos'), inter: col('inter'), acertos: col('acertos'), comprovantes: col('comprovantes'),
-    fixos: col('fixos'), futuros: col('futuros'), pontos: col('pontos'), viagens: col('viagens'), pix: col('pix'),
+    fixos: col('fixos'), futuros: col('futuros'), pontos: col('pontos'), viagens: col('viagens'), pix: col('pix'), caixinha: col('caixinha'), metas: col('metas'),
     // lançamentos da fatura do Inter: os criados na aba Inter + gastos do Painel de Compras pagos com "Cartão Inter"
     // a fatura é definida pela DATA da compra e pelo dia de fechamento (config.diaFechamento), não pelo mês do calendário
     lancInter(mes) {

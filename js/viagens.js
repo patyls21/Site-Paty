@@ -1,0 +1,226 @@
+// Aba Viagens: caixinha mensal (com rendimento em % do CDI) + meta da viagem com gastos previstos e já pagos.
+(() => {
+  const C = () => Store.config;
+  const num = (v, pad = 0) => Number.isFinite(Number(v)) ? Number(v) : pad;
+  const pessoas = ['A', 'B'];
+  const n = k => App.nome(k);
+
+  // ---------- caixinha ----------
+  // mês em que começa a contar: o configurado, senão o primeiro mês com aporte editado, senão o atual
+  const inicio = () => C().viagemInicio || Store.caixinha.lista().map(x => x.mes).sort()[0] || U.mesAtual();
+  const aporteMes = m => {
+    const o = Store.caixinha.lista().find(x => x.mes === m);
+    return o ? { A: o.A, B: o.B, alterado: true, id: o.id } : { A: num(C().viagemAporteA), B: num(C().viagemAporteB), alterado: false };
+  };
+  // 120% do CDI: taxa anual efetiva a partir do CDI (252 dias úteis), depois rendimento por dia corrido
+  const taxaAno = () => {
+    const cdi = num(C().cdiAnual) / 100, p = num(C().pctCdi) / 100, d = Math.pow(1 + cdi, 1 / 252) - 1;
+    return Math.pow(1 + p * d, 252) - 1;
+  };
+  const taxaDia = () => Math.pow(1 + taxaAno(), 1 / 365) - 1;
+
+  // saldo estimado em uma data: aportes no dia 1 de cada mês, rendendo todo dia (valores brutos, antes do IR)
+  function simular(fim) {
+    const ini = inicio(), td = taxaDia(), saldoIni = num(C().viagemSaldoInicial);
+    let bal = saldoIni, ult = ini + '-01', aportado = 0;
+    const render = ate => { const d = U.diasEntre(ult, ate); if (d > 0) { bal *= Math.pow(1 + td, d); ult = ate; } };
+    for (let m = ini; m + '-01' <= fim; m = U.mesSoma(m, 1)) {
+      render(m + '-01');
+      const a = aporteMes(m); bal += a.A + a.B; aportado += a.A + a.B;
+    }
+    render(fim);
+    const saldo = Math.round(bal);
+    return { saldo, aportado, rendimento: saldo - saldoIni - aportado };
+  }
+
+  // ---------- viagem (meta) ----------
+  const fim = m => m.fim || m.data; // viagens antigas sem check-out
+  const noites = m => Math.max(0, U.diasEntre(m.data, fim(m)));
+  const totalItem = i => Math.round(num(i.qtd, 1) * num(i.unit));
+  const metaAtiva = () => {
+    const ls = Store.metas.lista().slice().sort((a, b) => a.data.localeCompare(b.data));
+    return ls.find(x => x.id === C().viagemMetaAtiva) || ls.find(x => x.data >= U.hoje()) || ls[0] || null;
+  };
+  const totais = m => {
+    const itens = m.itens || [];
+    const total = itens.reduce((s, i) => s + totalItem(i), 0), pago = itens.filter(i => i.pago).reduce((s, i) => s + totalItem(i), 0);
+    return { total, pago, faltaPagar: total - pago };
+  };
+  const mesesAte = m => { const [y1, m1] = U.mesAtual().split('-').map(Number), [y2, m2] = m.data.slice(0, 7).split('-').map(Number); return (y2 - y1) * 12 + (m2 - m1); };
+
+  // ---------- formulários ----------
+  function formCaixinha() {
+    const c = C();
+    App.form('Caixinha: aporte e rendimento', [
+      { k: 'A', rotulo: `Aporte mensal padrão de ${n('A')} (R$)`, inputmode: 'decimal', req: true },
+      { k: 'B', rotulo: `Aporte mensal padrão de ${n('B')} (R$)`, inputmode: 'decimal', req: true },
+      { k: 'ini', rotulo: 'Mês em que começou a contar', tipo: 'month', req: true, dica: 'Os aportes padrão valem a partir desse mês, sempre no dia 1.' },
+      { k: 'saldo', rotulo: 'Quanto já tinha na caixinha nesse mês, antes do aporte (R$)', inputmode: 'decimal', req: true },
+      { k: 'pct', rotulo: 'Rende quantos % do CDI?', inputmode: 'decimal', req: true },
+      { k: 'cdi', rotulo: 'CDI atual (% ao ano)', inputmode: 'decimal', req: true, dica: 'Confira o valor no site do Banco Central e atualize de vez em quando.' }
+    ], { A: U.valorInput(num(c.viagemAporteA)), B: U.valorInput(num(c.viagemAporteB)), ini: inicio(), saldo: U.valorInput(num(c.viagemSaldoInicial)), pct: String(c.pctCdi).replace('.', ','), cdi: String(c.cdiAnual).replace('.', ',') }, f => {
+      const A = U.parseValor(f.A), B = U.parseValor(f.B), saldo = U.parseValor(f.saldo);
+      const pct = Number(String(f.pct).replace(',', '.')), cdi = Number(String(f.cdi).replace(',', '.'));
+      if (![A, B, saldo].every(v => v >= 0) || !(pct >= 0) || !(cdi >= 0) || !/^\d{4}-\d{2}$/.test(f.ini)) { alert('Confira os valores.'); return false; }
+      Store.setConfig({ viagemAporteA: A, viagemAporteB: B, viagemSaldoInicial: saldo, viagemInicio: f.ini, pctCdi: pct, cdiAnual: cdi });
+    });
+  }
+
+  function formMes(m) {
+    const a = aporteMes(m);
+    App.form('Aporte de ' + U.mesNome(m), [
+      { k: 'A', rotulo: `${n('A')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
+      { k: 'B', rotulo: `${n('B')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true }
+    ], { A: U.valorInput(a.A), B: U.valorInput(a.B) }, f => {
+      const A = U.parseValor(f.A), B = U.parseValor(f.B);
+      if (!(A >= 0) || !(B >= 0)) { alert('Valor inválido.'); return false; }
+      a.id ? Store.caixinha.set(a.id, { mes: m, A, B }) : Store.caixinha.add({ mes: m, A, B });
+    }, a.alterado ? { rotulo: '↩ Voltar ao padrão', fn: () => Store.caixinha.del(a.id) } : null);
+  }
+
+  function formViagem(v) {
+    App.form(v ? 'Editar viagem' : 'Nova viagem', [
+      { k: 'nome', rotulo: 'Nome (ex.: Rio Quente + Laqua)', req: true },
+      { k: 'data', rotulo: 'Check-in (ida)', tipo: 'date', req: true },
+      { k: 'fim', rotulo: 'Check-out (volta)', tipo: 'date', req: true, dica: 'Os avisos de "falta pouco" vão de 1 mês antes até o check-out.' }
+    ], v ? { ...v, fim: fim(v) } : { data: U.hoje(), fim: U.hoje() }, f => {
+      if (f.fim < f.data) { alert('O check-out não pode ser antes do check-in.'); return false; }
+      if (v) Store.metas.set(v.id, { ...v, nome: f.nome.trim(), data: f.data, fim: f.fim });
+      else { const o = Store.metas.add({ nome: f.nome.trim(), data: f.data, fim: f.fim, itens: [] }); Store.setConfig({ viagemMetaAtiva: o.id }); }
+    });
+  }
+
+  function formItem(m, it) {
+    App.form(it ? 'Editar gasto previsto' : 'Gasto previsto', [
+      { k: 'desc', rotulo: 'O que é (ex.: Hospedagem, Combustível, Alimentação)', req: true },
+      { k: 'qtd', rotulo: 'Quantidade (ex.: nº de diárias)', inputmode: 'decimal', req: true, dica: `Esta viagem tem ${noites(m)} noite(s).` },
+      { k: 'unit', rotulo: 'Valor de cada (R$)', inputmode: 'decimal', req: true },
+      { k: 'pago', rotulo: 'Já foi pago?', tipo: 'select', opcoes: [['nao', 'Ainda não'], ['sim', 'Sim, já paguei']] }
+    ], it ? { desc: it.desc, qtd: String(it.qtd).replace('.', ','), unit: U.valorInput(it.unit), pago: it.pago ? 'sim' : 'nao' } : { qtd: '1', pago: 'nao' }, f => {
+      const qtd = Number(String(f.qtd).replace(',', '.')), unit = U.parseValor(f.unit);
+      if (!(qtd > 0) || !(unit >= 0)) { alert('Quantidade ou valor inválido.'); return false; }
+      const o = { id: it ? it.id : U.id(), desc: f.desc.trim(), qtd, unit, pago: f.pago === 'sim' };
+      const itens = it ? m.itens.map(x => x.id === it.id ? o : x) : [...(m.itens || []), o];
+      Store.metas.set(m.id, { ...m, itens });
+    });
+  }
+
+  // ---------- gráfico: pago / na caixinha / falta ----------
+  function rosca(partes) {
+    const R = 52, L = 2 * Math.PI * R, tot = partes.reduce((s, p) => s + p.v, 0) || 1;
+    let off = 0;
+    const arcos = partes.filter(p => p.v > 0).map(p => {
+      const len = L * p.v / tot, s = `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${p.cor}" stroke-width="22" stroke-dasharray="${len} ${L - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`;
+      off += len; return s;
+    }).join('');
+    return `<svg viewBox="0 0 140 140" width="170" height="170" role="img" aria-label="Quanto falta para a meta"><circle r="${R}" cx="70" cy="70" fill="none" stroke="var(--card2)" stroke-width="22"/>${arcos}</svg>`;
+  }
+
+  const MESES_FUTUROS = 3;
+
+  App.registrar('viagens', el => {
+    const hoje = U.hoje(), c = C(), agora = simular(hoje), m = metaAtiva();
+    const todas = Store.metas.lista().slice().sort((a, b) => a.data.localeCompare(b.data));
+    let html = `
+      <div class="cards">
+        <div class="card ok"><small>🐷 Na caixinha agora</small><strong>${U.brl(agora.saldo)}</strong></div>
+        <div class="card"><small>Colocado até hoje</small><strong>${U.brl(num(c.viagemSaldoInicial) + agora.aportado)}</strong></div>
+        <div class="card a"><small>Rendimento estimado</small><strong>${U.brl(agora.rendimento)}</strong></div>
+        <div class="card b"><small>Rende por mês (aprox.)</small><strong>${U.brl(Math.round(agora.saldo * (Math.pow(1 + taxaDia(), 30) - 1)))}</strong></div>
+      </div>
+      <p class="sub">Aporte padrão: <b>${U.esc(n('A'))}</b> ${U.brl(num(c.viagemAporteA))} · <b>${U.esc(n('B'))}</b> ${U.brl(num(c.viagemAporteB))} por mês. Rendendo ${String(c.pctCdi).replace('.', ',')}% do CDI (${(taxaAno() * 100).toFixed(2).replace('.', ',')}% ao ano, valor bruto estimado).
+        <button class="btn sec mini-b" id="v-cfg">Alterar</button></p>`;
+
+    if (m) {
+      const t = totais(m), caixa = agora.saldo, falta = Math.max(0, t.faltaPagar - caixa), naCaixa = Math.min(caixa, t.faltaPagar);
+      const meses = mesesAte(m), porMes = falta / Math.max(1, meses);
+      const proj = simular(m.data).saldo, sobra = proj - t.faltaPagar;
+      const pct = t.total ? Math.round((t.pago + naCaixa) / t.total * 100) : 0;
+      html += `
+      <section class="bloco"><h2>🧳 ${U.esc(m.nome)}</h2>
+        <p class="sub" style="margin:-4px 0 12px">Check-in <b>${U.dataBR(m.data)}</b> · check-out <b>${U.dataBR(fim(m))}</b> · ${noites(m)} noite(s)</p>
+        <div class="viagem-grade">
+          <div class="viagem-graf">${rosca([{ v: t.pago, cor: '#2fb872' }, { v: naCaixa, cor: '#f4c53d' }, { v: falta, cor: '#e5533d' }])}
+            <div class="viagem-pct"><b>${pct}%</b><span>da meta</span></div></div>
+          <div>
+            <div class="cmp-leg" style="flex-direction:column;align-items:flex-start;gap:6px;margin:0 0 10px">
+              <span><i style="background:#2fb872"></i>Já pago: ${U.brl(t.pago)}</span>
+              <span><i style="background:#f4c53d"></i>Na caixinha (conta para a meta): ${U.brl(naCaixa)}</span>
+              <span><i style="background:#e5533d"></i>Falta juntar: <b>${U.brl(falta)}</b></span>
+            </div>
+            <div class="cards" style="margin:0">
+              <div class="card"><small>Meta total</small><strong>${U.brl(t.total)}</strong></div>
+              <div class="card"><small>Falta pagar</small><strong>${U.brl(t.faltaPagar)}</strong></div>
+              <div class="card"><small>Meses até a viagem</small><strong>${Math.max(0, meses)}</strong></div>
+            </div>
+          </div>
+        </div>
+        <div class="cards">
+          <div class="card ok"><small>Colocar por mês (casal)</small><strong>${U.brl(Math.ceil(porMes))}</strong></div>
+          <div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(porMes / 2))}</strong></div>
+        </div>
+        <div class="acerto">${falta === 0 ? 'Meta batida! 🎉 Já dá para pagar tudo que falta.' : `Mantendo o aporte padrão, na data da viagem a caixinha terá ${U.brl(proj)}: ${sobra >= 0 ? `sobra ${U.brl(sobra)} 💜` : `ainda faltam ${U.brl(-sobra)}.`}`}</div>
+        <div class="filtros"><button class="btn" id="v-item">+ Gasto previsto</button><button class="btn sec" id="v-edit">Editar viagem</button><button class="btn sec" id="v-del">Excluir viagem</button></div>
+        ${(m.itens || []).length ? `<table><thead><tr><th>Gasto</th><th class="v">Qtd</th><th class="v">Cada</th><th class="v">Total</th><th>Situação</th><th></th></tr></thead><tbody>${m.itens.map(i => `
+          <tr><td>${U.esc(i.desc)}</td><td class="v">${String(i.qtd).replace('.', ',')}</td><td class="v">${U.brl(i.unit)}</td><td class="v">${U.brl(totalItem(i))}</td>
+          <td><button class="chip ${i.pago ? 'ok' : 'ambos'}" data-p="${i.id}" style="border:0;cursor:pointer" title="Tocar para alternar">${i.pago ? '✔ pago' : '⏳ a pagar'}</button></td>
+          <td><button class="mini" data-ie="${i.id}" aria-label="Editar">✏️</button><button class="mini" data-ix="${i.id}" aria-label="Excluir">🗑</button></td></tr>`).join('')}</tbody></table>`
+        : '<div class="vazio">Adicione os gastos previstos (hospedagem, combustível, alimentação…) para calcular a meta.</div>'}
+      </section>`;
+    } else {
+      html += '<div class="vazio">Crie a primeira viagem e adicione os gastos previstos: o site calcula a meta e quanto falta. ✈</div>';
+    }
+
+    if (todas.length > 1) {
+      html += `<section class="bloco"><h2>Minhas viagens</h2>${todas.map(v => { const t = totais(v); return `<div class="pend"><div><b>${U.esc(v.nome)}</b><br><span class="sub">${U.dataBR(v.data)} a ${U.dataBR(fim(v))} · meta ${U.brl(t.total)}</span></div>
+        ${m && v.id === m.id ? '<span class="chip ok">meta atual</span>' : `<button class="btn sec mini-b" data-usar="${v.id}">Usar como meta</button>`}</div>`; }).join('')}</section>`;
+    }
+
+    // aportes mês a mês: do começo até alguns meses à frente (ou até a viagem)
+    const mesViagem = m ? m.data.slice(0, 7) : '', mesLimite = U.mesSoma(U.mesAtual(), MESES_FUTUROS);
+    const ultimo = mesViagem > mesLimite ? mesViagem : mesLimite;
+    const linhas = [];
+    for (let mm = inicio(); mm <= ultimo; mm = U.mesSoma(mm, 1)) linhas.push(mm);
+    html += `<section class="bloco"><h2>Aportes mês a mês</h2>
+      <p class="sub">Por padrão entra o valor combinado todo mês. Se alguém não conseguir colocar, toque em ✏️ e coloque 0 (ou outro valor) naquele mês.</p>
+      <table><thead><tr><th>Mês</th><th class="v">${U.esc(n('A'))}</th><th class="v">${U.esc(n('B'))}</th><th class="v">Total</th><th></th></tr></thead><tbody>${linhas.map(mm => { const a = aporteMes(mm), fut = mm > U.mesAtual(); return `
+        <tr><td>${U.mesNome(mm)}${fut ? ' <span class="chip">previsto</span>' : ''}${a.alterado ? ' <span class="chip ambos">alterado</span>' : ''}</td><td class="v">${U.brl(a.A)}</td><td class="v">${U.brl(a.B)}</td><td class="v">${U.brl(a.A + a.B)}</td>
+        <td><button class="mini" data-mes="${mm}" aria-label="Alterar aporte">✏️</button></td></tr>`; }).join('')}</tbody></table></section>`;
+
+    el.innerHTML = html;
+    App.$('#v-cfg').onclick = formCaixinha;
+    el.querySelectorAll('[data-mes]').forEach(b => b.onclick = () => formMes(b.dataset.mes));
+    el.querySelectorAll('[data-usar]').forEach(b => b.onclick = () => Store.setConfig({ viagemMetaAtiva: b.dataset.usar }));
+    if (m) {
+      App.$('#v-item').onclick = () => formItem(m, null);
+      App.$('#v-edit').onclick = () => formViagem(m);
+      App.$('#v-del').onclick = () => { if (confirm('Excluir esta viagem e os gastos previstos dela?')) Store.metas.del(m.id); };
+      el.querySelectorAll('[data-ie]').forEach(b => b.onclick = () => formItem(m, m.itens.find(i => i.id === b.dataset.ie)));
+      el.querySelectorAll('[data-ix]').forEach(b => b.onclick = () => { if (confirm('Excluir gasto?')) Store.metas.set(m.id, { ...m, itens: m.itens.filter(i => i.id !== b.dataset.ix) }); });
+      el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => Store.metas.set(m.id, { ...m, itens: m.itens.map(i => i.id === b.dataset.p ? { ...i, pago: !i.pago } : i) }));
+    }
+  }, () => ({ crumb: 'Planejamento › Viagens', titulo: 'Viagens', sub: 'Caixinha mensal rendendo, meta da viagem e quanto falta juntar.', cta: { rotulo: 'Nova viagem', fn: () => formViagem(null) } }));
+
+  // avisos de uma data: 1 mês, 15, 7 e 3 dias antes do check-in e depois todo dia até o check-out
+  window.Viagens = {
+    avisosDoDia(iso) {
+      const out = [];
+      Store.metas.lista().forEach(m => {
+        const dias = U.diasEntre(iso, m.data), t = totais(m), falta = Math.max(0, t.faltaPagar - simular(iso).saldo);
+        const meta = t.total ? ` Falta juntar ${U.brl(falta)} da meta.` : '';
+        const base = { tipo: 'viagem', urgente: false };
+        if (dias > 0 && (dias === 30 || dias === 15 || dias === 7 || dias <= 3)) {
+          const quando = dias === 30 ? 'Falta 1 mês' : dias === 1 ? 'Falta 1 dia' : `Faltam ${dias} dias`;
+          out.push({ ...base, titulo: `✈️ ${m.nome}: ${quando} para a viagem!`, texto: `Check-in dia ${U.dataBR(m.data).slice(0, 5)}.${meta}` });
+        } else if (dias === 0) out.push({ ...base, titulo: `🎉 Hoje é o dia: ${m.nome}!`, texto: 'Boa viagem! Aproveitem muito 💜' });
+        else if (dias < 0 && iso <= fim(m)) {
+          const resta = U.diasEntre(iso, fim(m));
+          out.push({ ...base, titulo: `🧳 ${m.nome}: dia ${-dias + 1} da viagem`, texto: resta ? `Check-out dia ${U.dataBR(fim(m)).slice(0, 5)} (em ${resta} dia${resta > 1 ? 's' : ''}). Curtam! 💜` : 'Hoje é o check-out. Boa volta! 💜' });
+        }
+      });
+      return out;
+    },
+    // último dia em que ainda há aviso de viagem (para limitar o plano do app)
+    ultimoDia: () => Store.metas.lista().reduce((u, m) => fim(m) > u ? fim(m) : u, '')
+  };
+})();
