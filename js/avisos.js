@@ -30,6 +30,7 @@ const Avisos = (() => {
   function doDia(iso, f) {
     const l = [], a = avisoFatura(f, iso); if (a) l.push(a);
     if (typeof Viagens !== 'undefined') l.push(...Viagens.avisosDoDia(iso));
+    if (typeof Caixinhas !== 'undefined') l.push(...Caixinhas.avisosDoDia(iso, App.eu()));
     return l;
   }
   // situação de hoje (para a faixa)
@@ -39,7 +40,8 @@ const Avisos = (() => {
   function plano(hoje = U.hoje()) {
     const f = faturaInfo(hoje), lista = [];
     const fimFat = f ? f.vence : '', fimViagem = typeof Viagens !== 'undefined' ? Viagens.ultimoDia() : '';
-    const ultimo = [fimFat, fimViagem, hoje].reduce((u, x) => x > u ? x : u, '');
+    const fimCaixinha = typeof Caixinhas !== 'undefined' ? Caixinhas.ultimoDia() : '';
+    const ultimo = [fimFat, fimViagem, fimCaixinha, hoje].reduce((u, x) => x > u ? x : u, '');
     for (let iso = hoje, i = 0; iso <= ultimo && i < 800; iso = somaDias(iso, 1), i++) {
       doDia(iso, f).forEach(a => lista.push({ data: iso, titulo: a.titulo, texto: a.texto }));
     }
@@ -52,8 +54,12 @@ const Avisos = (() => {
     const pedir = !nativo() && 'Notification' in window && Notification.permission === 'default';
     el.hidden = false; el.className = '';
     el.innerHTML = avisos.map((a, i) => `<div class="aviso-fatura${a.urgente ? ' urgente' : ''}"><div><b>${U.esc(a.titulo)}</b><br><span>${U.esc(a.texto)}</span></div>
-      <div class="aviso-acoes"><button type="button" class="btn mini-b" data-av="${a.tipo}">${a.tipo === 'fatura' ? 'Pagar agora' : 'Ver viagem'}</button>${pedir && i === 0 ? '<button type="button" class="btn sec mini-b" id="av-ativar">🔔 Ativar avisos</button>' : ''}</div></div>`).join('');
-    el.querySelectorAll('[data-av]').forEach(b => b.onclick = () => b.dataset.av === 'fatura' ? App.pendencias() : (document.body.classList.contains('solo') ? (location.href = 'index.html#viagens') : (location.hash = 'viagens')));
+      <div class="aviso-acoes"><button type="button" class="btn mini-b" data-av="${a.tipo}">${{ fatura: 'Pagar agora', viagem: 'Ver viagem', caixinha: 'Ver caixinhas' }[a.tipo]}</button>${pedir && i === 0 ? '<button type="button" class="btn sec mini-b" id="av-ativar">🔔 Ativar avisos</button>' : ''}</div></div>`).join('');
+    el.querySelectorAll('[data-av]').forEach(b => b.onclick = () => {
+      if (b.dataset.av === 'fatura') return App.pendencias();
+      const aba = b.dataset.av === 'caixinha' ? 'caixinhas' : 'viagens';
+      document.body.classList.contains('solo') ? (location.href = 'index.html#' + aba) : (location.hash = aba);
+    });
     const at = el.querySelector('#av-ativar');
     if (at) at.onclick = async () => { try { await Notification.requestPermission(); } catch {} atualizar(); };
   }

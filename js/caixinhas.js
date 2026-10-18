@@ -40,6 +40,8 @@
       const a = aporteMes(cx, m);
       [[a.dA, a.A], [a.dB, a.B]].forEach(([d, v]) => { if (v > 0 && d <= fim) { aportado += v; dep.push({ d, v }); } });
     }
+    // depósitos avulsos já feitos entram na data em que foram colocados (os "programados" só contam quando marcados como feitos)
+    (cx.avulsos || []).forEach(a => { const d = a.feito ? (a.feitoEm || a.data) : ''; if (d && d <= fim) { aportado += a.valor; dep.push({ d, v: a.valor }); } });
     dep.sort((x, y) => x.d.localeCompare(y.d));
     let bal = ancora ? num(cx.ancoraSaldo) : saldoIni, ult = ancora || ini + '-01';
     const render = ate => { const k = U.diasEntre(ult, ate); if (k > 0) { bal *= Math.pow(1 + td, k); ult = ate; } };
@@ -116,6 +118,23 @@
     }, a.alterado ? { rotulo: '↩ Voltar ao padrão', fn: () => { const meses = { ...cx.meses }; delete meses[m]; salvar(cx, { meses }); } } : null);
   }
 
+  // depósito avulso: um valor só, de uma pessoa, numa data (já colocado ou ainda por colocar, com aviso no dia)
+  const faltaDe = (cx, k) => (cx.avulsos || []).filter(a => !a.feito && a.quem === k).reduce((s, a) => s + a.valor, 0);
+  function formAvulso(cx, av) {
+    App.form(av ? 'Editar depósito avulso' : 'Depósito avulso', [
+      { k: 'quem', rotulo: 'Quem coloca', tipo: 'select', opcoes: [['A', n('A')], ['B', n('B')]] },
+      { k: 'valor', rotulo: 'Valor (R$)', inputmode: 'decimal', req: true },
+      { k: 'data', rotulo: 'Data (em que colocou ou em que vai colocar)', tipo: 'date', req: true },
+      { k: 'situacao', rotulo: 'Situação', tipo: 'select', opcoes: [['prog', 'Ainda vou colocar (avisar no dia)'], ['feito', 'Já coloquei']] }
+    ], av ? { quem: av.quem, valor: U.valorInput(av.valor), data: av.data, situacao: av.feito ? 'feito' : 'prog' } : { quem: App.eu() || 'A', data: U.hoje(), situacao: 'prog' }, f => {
+      const valor = U.parseValor(f.valor);
+      if (!(valor > 0)) { alert('Valor inválido.'); return false; }
+      const feito = f.situacao === 'feito';
+      const o = { id: av ? av.id : U.id(), quem: f.quem, valor, data: f.data, feito, ...(feito ? { feitoEm: av && av.feito ? av.feitoEm : f.data } : {}) };
+      salvar(cx, { avulsos: av ? cx.avulsos.map(x => x.id === av.id ? o : x) : [...(cx.avulsos || []), o] });
+    });
+  }
+
   function formSaldoReal(cx) {
     App.form('Atualizar com o saldo real', [
       { k: 'saldo', rotulo: 'Saldo que aparece no app do banco agora (R$)', inputmode: 'decimal', req: true, dica: 'Depois disso o site só soma os depósitos novos e o rendimento a partir daqui.' },
@@ -164,6 +183,7 @@
         <div class="card ok"><small>${U.esc(cx.icone || '🐷')} Na caixinha agora</small><strong>${U.brl(caixa)}</strong></div>
         <div class="card"><small>Colocado até hoje</small><strong>${U.brl(num(cx.saldoInicial) + ag.aportado)}</strong></div>
         <div class="card a"><small>Rendimento estimado</small><strong>${U.brl(ag.rendimento)}</strong></div>
+        ${['A', 'B'].map(k => faltaDe(cx, k) > 0 ? `<div class="card ${k === 'A' ? 'a' : 'b'}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(faltaDe(cx, k))}</strong></div>` : '').join('')}
       </div>
       <p class="sub">Aporte padrão: <b>${U.esc(n('A'))}</b> ${U.brl(num(cx.aporteA))} (dia ${num(cx.diaA, 26)}) · <b>${U.esc(n('B'))}</b> ${U.brl(num(cx.aporteB))} (dia ${num(cx.diaB, 26)}).
         ${num(cx.pct) > 0 ? `Rendendo ${String(cx.pct).replace('.', ',')}% do CDI (${(taxaAno(cx) * 100).toFixed(2).replace('.', ',')}% ao ano, bruto estimado).` : 'Sem rendimento.'}
@@ -193,6 +213,14 @@
       </section>`;
     }
 
+    const avs = (cx.avulsos || []).slice().sort((a, b) => a.data.localeCompare(b.data));
+    html += `<section class="bloco"><h2>Depósitos avulsos</h2>
+      <p class="sub">Para valores que não são o aporte mensal: o que já foi colocado ou o que ainda falta colocar. Os "a colocar" avisam no dia marcado.</p>
+      <div class="filtros"><button class="btn" id="c-avulso">+ Depósito avulso</button></div>
+      ${avs.length ? avs.map(a => `<div class="pend" style="cursor:default"><div><b>${U.esc(n(a.quem))} · ${U.brl(a.valor)}</b><br><span class="sub">${dm(a.data)}${a.feito ? '' : ' · avisa nesse dia'}</span></div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${a.feito ? '<span class="chip ok">✔ colocado</span>' : `<span class="chip ambos">⏳ a colocar</span><button class="btn mini-b" data-feito="${a.id}">Já coloquei</button>`}
+        <button class="mini" data-ave="${a.id}" aria-label="Editar">✏️</button><button class="mini" data-avx="${a.id}" aria-label="Excluir">🗑</button></div></div>`).join('') : '<div class="vazio">Nenhum depósito avulso.</div>'}</section>`;
+
     const ultimo = U.mesSoma(U.mesAtual(), 3), linhas = [];
     for (let mm = cx.inicio || U.mesAtual(); mm <= ultimo; mm = U.mesSoma(mm, 1)) linhas.push(mm);
     html += `<section class="bloco"><h2>Aportes mês a mês</h2>
@@ -210,10 +238,18 @@
     App.$('#c-fim').onclick = () => salvar(cx, { concluida: !cx.concluida });
     App.$('#c-del').onclick = () => { if (confirm(`Excluir a caixinha "${cx.nome}"?`)) { Store.cofres.del(cx.id); location.hash = 'caixinhas'; } };
     el.querySelectorAll('[data-mes]').forEach(b => b.onclick = () => formMes(cx, b.dataset.mes));
+    App.$('#c-avulso').onclick = () => formAvulso(cx, null);
+    el.querySelectorAll('[data-feito]').forEach(b => b.onclick = () => salvar(cx, { avulsos: cx.avulsos.map(a => a.id === b.dataset.feito ? { ...a, feito: true, feitoEm: U.hoje() } : a) }));
+    el.querySelectorAll('[data-ave]').forEach(b => b.onclick = () => formAvulso(cx, cx.avulsos.find(a => a.id === b.dataset.ave)));
+    el.querySelectorAll('[data-avx]').forEach(b => b.onclick = () => { if (confirm('Excluir este depósito?')) salvar(cx, { avulsos: cx.avulsos.filter(a => a.id !== b.dataset.avx) }); });
   }
 
   // usado pela aba Viagens (viagem paga com uma caixinha à parte)
   window.Caixinhas = {
+    // lembrete no dia de cada depósito avulso ainda "a colocar", só para a pessoa que vai colocar
+    avisosDoDia: (iso, quem) => !quem ? [] : Store.cofres.lista().flatMap(cx => (cx.avulsos || []).filter(a => !a.feito && a.quem === quem && a.data === iso).map(a => ({
+      tipo: 'caixinha', urgente: false, titulo: `🐷 Hoje é dia de colocar na caixinha!`, texto: `${n(quem)}, coloque ${U.brl(a.valor)} na caixinha "${cx.nome}" hoje.` }))),
+    ultimoDia: () => Store.cofres.lista().flatMap(cx => (cx.avulsos || []).filter(a => !a.feito).map(a => a.data)).reduce((u, d) => d > u ? d : u, ''),
     nome: id => { const c = Store.cofres.lista().find(x => x.id === id); return c ? c.nome : null; },
     saldoEm: (id, fim) => { const c = Store.cofres.lista().find(x => x.id === id); return c ? simular(c, fim).saldo : 0; }
   };
