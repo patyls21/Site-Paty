@@ -251,8 +251,8 @@
       tipo: 'caixinha', urgente: false, titulo: `🐷 Hoje é dia de colocar na caixinha!`, texto: `${n(quem)}, coloque ${U.brl(a.valor)} na caixinha "${cx.nome}" hoje.` }))),
     // quanto ainda está marcado para colocar na caixinha (depósitos avulsos "a colocar"), por pessoa
     programado: id => {
-      const c = Store.cofres.lista().find(x => x.id === id), r = { A: 0, B: 0, total: 0 };
-      (c && c.avulsos || []).forEach(a => { if (!a.feito) { r[a.quem] += a.valor; r.total += a.valor; } });
+      const c = Store.cofres.lista().find(x => x.id === id), r = { A: 0, B: 0, total: 0, data: { A: '', B: '' } };
+      (c && c.avulsos || []).forEach(a => { if (!a.feito) { r[a.quem] += a.valor; r.total += a.valor; if (!r.data[a.quem] || a.data < r.data[a.quem]) r.data[a.quem] = a.data; } });
       return r;
     },
     ultimoDia: () => Store.cofres.lista().flatMap(cx => (cx.avulsos || []).filter(a => !a.feito).map(a => a.data)).reduce((u, d) => d > u ? d : u, ''),

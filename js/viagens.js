@@ -182,6 +182,10 @@
       const t = totais(m), caixa = saldoViagem(m, hoje), prog = progDe(m), naCaixa = Math.min(caixa, t.faltaPagar);
       const marcado = Math.min(prog.total, Math.max(0, t.faltaPagar - naCaixa)), falta = Math.max(0, t.faltaPagar - caixa - prog.total);
       const meses = mesesAte(m), porMes = falta / Math.max(1, meses);
+      // se só uma pessoa já tem depósito marcado, o que sobra para juntar é da outra (e a divisão por mês vale só para ela)
+      const resto = { A: 0, B: 0 };
+      if (falta > 0 && prog.total > 0) { if (prog.A > 0 && !(prog.B > 0)) resto.B = falta; else if (prog.B > 0 && !(prog.A > 0)) resto.A = falta; }
+      const soUm = resto.A > 0 || resto.B > 0;
       const proj = saldoViagem(m, m.data) + prog.total, sobra = proj - t.faltaPagar;
       const pct = t.total ? Math.round((t.pago + naCaixa) / t.total * 100) : 0;
       html += `
@@ -205,9 +209,10 @@
           </div>
         </div>
         <div class="cards">
-          <div class="card ok"><small>Colocar por mês (casal)</small><strong>${U.brl(Math.ceil(porMes))}</strong></div>
-          <div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(porMes / 2))}</strong></div>
-          ${['A', 'B'].map(k => prog[k] > 0 ? `<div class="card ${k === 'A' ? 'a' : 'b'}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(prog[k])}</strong></div>` : '').join('')}
+          ${soUm || (falta === 0 && prog.total > 0) ? '' : `<div class="card ok"><small>Colocar por mês (casal)</small><strong>${U.brl(Math.ceil(porMes))}</strong></div>
+          <div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(porMes / 2))}</strong></div>`}
+          ${['A', 'B'].map(k => prog[k] + resto[k] > 0 ? `<div class="card ${k === 'A' ? 'a' : 'b'}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(prog[k] + resto[k])}</strong>${prog[k] > 0 && prog.data[k] ? `<small style="margin-top:4px">${resto[k] > 0 ? U.brl(prog[k]) + ' ' : ''}até ${U.dataBR(prog.data[k]).slice(0, 5)}</small>` : ''}</div>` : '').join('')}
+          ${['A', 'B'].map(k => resto[k] > 0 ? `<div class="card ok"><small>Por mês · ${U.esc(n(k))}</small><strong>${U.brl(Math.ceil(resto[k] / Math.max(1, meses)))}</strong><small style="margin-top:4px">só a parte que falta</small></div>` : '').join('')}
         </div>
         <div class="acerto">${falta === 0 ? (prog.total > 0 ? 'Tudo coberto 💜 Falta só colocar o que já está marcado na caixinha.' : 'Meta batida! 🎉 Já dá para pagar tudo que falta.') : `${m.fonte ? 'Com o que já está marcado na caixinha' : 'Mantendo o aporte padrão'}, na data da viagem a caixinha terá ${U.brl(proj)}: ${sobra >= 0 ? `sobra ${U.brl(sobra)} 💜` : `ainda faltam ${U.brl(-sobra)}.`}`}</div>
         <div class="filtros"><button class="btn" id="v-item">+ Gasto previsto</button><button class="btn sec" id="v-edit">Editar viagem</button><button class="btn sec" id="v-del">Excluir viagem</button></div>
