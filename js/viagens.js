@@ -8,9 +8,20 @@
   // ---------- caixinha ----------
   // mês em que começa a contar: o configurado, senão o primeiro mês com aporte editado, senão o atual
   const inicio = () => C().viagemInicio || Store.caixinha.lista().map(x => x.mes).sort()[0] || U.mesAtual();
+  const isoDe = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // dia do depósito no mês; sábado/domingo passam para a segunda-feira (feriados não são considerados)
+  const diaUtil = (m, dia) => {
+    const [y, mo] = m.split('-').map(Number), d = new Date(y, mo - 1, Math.min(Math.max(1, dia), new Date(y, mo, 0).getDate()));
+    if (d.getDay() === 6) d.setDate(d.getDate() + 2); else if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+    return isoDe(d);
+  };
+  const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const dataCurta = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)} (${SEM[new Date(iso + 'T12:00:00').getDay()]})`;
+  // aporte de cada um no mês: valor e data (padrão: o combinado; ou o que foi alterado naquele mês)
   const aporteMes = m => {
-    const o = Store.caixinha.lista().find(x => x.mes === m);
-    return o ? { A: o.A, B: o.B, alterado: true, id: o.id } : { A: num(C().viagemAporteA), B: num(C().viagemAporteB), alterado: false };
+    const o = Store.caixinha.lista().find(x => x.mes === m), c = C();
+    const dA = (o && o.dataA) || diaUtil(m, num(c.viagemDiaA, 26)), dB = (o && o.dataB) || diaUtil(m, num(c.viagemDiaB, 26));
+    return o ? { A: o.A, B: o.B, dA, dB, alterado: true, id: o.id } : { A: num(c.viagemAporteA), B: num(c.viagemAporteB), dA, dB, alterado: false };
   };
   // 120% do CDI: taxa anual efetiva a partir do CDI (252 dias úteis), depois rendimento por dia corrido
   const taxaAno = () => {
@@ -19,15 +30,20 @@
   };
   const taxaDia = () => Math.pow(1 + taxaAno(), 1 / 365) - 1;
 
-  // saldo estimado em uma data: aportes no dia 1 de cada mês, rendendo todo dia (valores brutos, antes do IR)
+  // saldo estimado em uma data: cada depósito entra na data dele e rende todo dia (valores brutos, antes do IR).
+  // Se foi informado o saldo real (ancora), o cálculo recomeça dele e só conta os depósitos depois daquela data.
   function simular(fim) {
-    const ini = inicio(), td = taxaDia(), saldoIni = num(C().viagemSaldoInicial);
-    let bal = saldoIni, ult = ini + '-01', aportado = 0;
-    const render = ate => { const d = U.diasEntre(ult, ate); if (d > 0) { bal *= Math.pow(1 + td, d); ult = ate; } };
+    const ini = inicio(), td = taxaDia(), c = C(), saldoIni = num(c.viagemSaldoInicial);
+    const ancora = c.viagemAncoraData && c.viagemAncoraData <= fim ? c.viagemAncoraData : '';
+    const dep = []; let aportado = 0;
     for (let m = ini; m + '-01' <= fim; m = U.mesSoma(m, 1)) {
-      render(m + '-01');
-      const a = aporteMes(m); bal += a.A + a.B; aportado += a.A + a.B;
+      const a = aporteMes(m);
+      [[a.dA, a.A], [a.dB, a.B]].forEach(([d, v]) => { if (v > 0 && d <= fim) { aportado += v; dep.push({ d, v }); } });
     }
+    dep.sort((x, y) => x.d.localeCompare(y.d));
+    let bal = ancora ? num(c.viagemAncoraSaldo) : saldoIni, ult = ancora || ini + '-01';
+    const render = ate => { const n = U.diasEntre(ult, ate); if (n > 0) { bal *= Math.pow(1 + td, n); ult = ate; } };
+    dep.forEach(x => { if (ancora && x.d <= ancora) return; render(x.d); bal += x.v; });
     render(fim);
     const saldo = Math.round(bal);
     return { saldo, aportado, rendimento: saldo - saldoIni - aportado };
@@ -54,27 +70,46 @@
     App.form('Caixinha: aporte e rendimento', [
       { k: 'A', rotulo: `Aporte mensal padrão de ${n('A')} (R$)`, inputmode: 'decimal', req: true },
       { k: 'B', rotulo: `Aporte mensal padrão de ${n('B')} (R$)`, inputmode: 'decimal', req: true },
-      { k: 'ini', rotulo: 'Mês em que começou a contar', tipo: 'month', req: true, dica: 'Os aportes padrão valem a partir desse mês, sempre no dia 1.' },
+      { k: 'diaA', rotulo: `Dia do depósito de ${n('A')} (1 a 31)`, tipo: 'number', req: true, dica: 'Se cair no fim de semana, vale a segunda-feira.' },
+      { k: 'diaB', rotulo: `Dia do depósito de ${n('B')} (1 a 31)`, tipo: 'number', req: true, dica: 'Em um mês diferente, ajuste a data na linha do mês (✏️).' },
+      { k: 'ini', rotulo: 'Mês em que começou a contar', tipo: 'month', req: true, dica: 'Os aportes padrão valem a partir desse mês.' },
       { k: 'saldo', rotulo: 'Quanto já tinha na caixinha nesse mês, antes do aporte (R$)', inputmode: 'decimal', req: true },
       { k: 'pct', rotulo: 'Rende quantos % do CDI?', inputmode: 'decimal', req: true },
       { k: 'cdi', rotulo: 'CDI atual (% ao ano)', inputmode: 'decimal', req: true, dica: 'Confira o valor no site do Banco Central e atualize de vez em quando.' }
-    ], { A: U.valorInput(num(c.viagemAporteA)), B: U.valorInput(num(c.viagemAporteB)), ini: inicio(), saldo: U.valorInput(num(c.viagemSaldoInicial)), pct: String(c.pctCdi).replace('.', ','), cdi: String(c.cdiAnual).replace('.', ',') }, f => {
+    ], { A: U.valorInput(num(c.viagemAporteA)), B: U.valorInput(num(c.viagemAporteB)), diaA: String(num(c.viagemDiaA, 26)), diaB: String(num(c.viagemDiaB, 26)), ini: inicio(), saldo: U.valorInput(num(c.viagemSaldoInicial)), pct: String(c.pctCdi).replace('.', ','), cdi: String(c.cdiAnual).replace('.', ',') }, f => {
       const A = U.parseValor(f.A), B = U.parseValor(f.B), saldo = U.parseValor(f.saldo);
       const pct = Number(String(f.pct).replace(',', '.')), cdi = Number(String(f.cdi).replace(',', '.'));
       if (![A, B, saldo].every(v => v >= 0) || !(pct >= 0) || !(cdi >= 0) || !/^\d{4}-\d{2}$/.test(f.ini)) { alert('Confira os valores.'); return false; }
-      Store.setConfig({ viagemAporteA: A, viagemAporteB: B, viagemSaldoInicial: saldo, viagemInicio: f.ini, pctCdi: pct, cdiAnual: cdi });
+      const dia = v => Math.min(31, Math.max(1, parseInt(v, 10) || 26));
+      Store.setConfig({ viagemAporteA: A, viagemAporteB: B, viagemDiaA: dia(f.diaA), viagemDiaB: dia(f.diaB), viagemSaldoInicial: saldo, viagemInicio: f.ini, pctCdi: pct, cdiAnual: cdi });
     });
+  }
+
+  // saldo real mostrado no app do banco: o cálculo recomeça dele (corrige a diferença da estimativa)
+  function formSaldoReal() {
+    const c = C();
+    App.form('Atualizar com o saldo real', [
+      { k: 'saldo', rotulo: 'Saldo que aparece no Mercado Pago agora (R$)', inputmode: 'decimal', req: true, dica: 'Depois disso o site só soma os depósitos novos e o rendimento a partir daqui.' },
+      { k: 'data', rotulo: 'Data desse saldo', tipo: 'date', req: true }
+    ], { saldo: c.viagemAncoraData ? U.valorInput(num(c.viagemAncoraSaldo)) : U.valorInput(simular(U.hoje()).saldo), data: U.hoje() }, f => {
+      const saldo = U.parseValor(f.saldo);
+      if (!(saldo >= 0)) { alert('Valor inválido.'); return false; }
+      Store.setConfig({ viagemAncoraData: f.data, viagemAncoraSaldo: saldo });
+    }, c.viagemAncoraData ? { rotulo: '↩ Voltar à estimativa', fn: () => Store.setConfig({ viagemAncoraData: '', viagemAncoraSaldo: 0 }) } : null, 'Atualizar');
   }
 
   function formMes(m) {
     const a = aporteMes(m);
     App.form('Aporte de ' + U.mesNome(m), [
       { k: 'A', rotulo: `${n('A')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
-      { k: 'B', rotulo: `${n('B')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true }
-    ], { A: U.valorInput(a.A), B: U.valorInput(a.B) }, f => {
+      { k: 'dataA', rotulo: `Data do depósito de ${n('A')}`, tipo: 'date', req: true },
+      { k: 'B', rotulo: `${n('B')} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
+      { k: 'dataB', rotulo: `Data do depósito de ${n('B')}`, tipo: 'date', req: true }
+    ], { A: U.valorInput(a.A), B: U.valorInput(a.B), dataA: a.dA, dataB: a.dB }, f => {
       const A = U.parseValor(f.A), B = U.parseValor(f.B);
       if (!(A >= 0) || !(B >= 0)) { alert('Valor inválido.'); return false; }
-      a.id ? Store.caixinha.set(a.id, { mes: m, A, B }) : Store.caixinha.add({ mes: m, A, B });
+      const o = { mes: m, A, B, dataA: f.dataA, dataB: f.dataB };
+      a.id ? Store.caixinha.set(a.id, o) : Store.caixinha.add(o);
     }, a.alterado ? { rotulo: '↩ Voltar ao padrão', fn: () => Store.caixinha.del(a.id) } : null);
   }
 
@@ -129,7 +164,8 @@
         <div class="card b"><small>Rende por mês (aprox.)</small><strong>${U.brl(Math.round(agora.saldo * (Math.pow(1 + taxaDia(), 30) - 1)))}</strong></div>
       </div>
       <p class="sub">Aporte padrão: <b>${U.esc(n('A'))}</b> ${U.brl(num(c.viagemAporteA))} · <b>${U.esc(n('B'))}</b> ${U.brl(num(c.viagemAporteB))} por mês. Rendendo ${String(c.pctCdi).replace('.', ',')}% do CDI (${(taxaAno() * 100).toFixed(2).replace('.', ',')}% ao ano, valor bruto estimado).
-        <button class="btn sec mini-b" id="v-cfg">Alterar</button></p>`;
+        ${c.viagemAncoraData ? `Saldo ajustado pelo valor real de ${U.dataBR(c.viagemAncoraData)} (${U.brl(num(c.viagemAncoraSaldo))}).` : 'Valor estimado: confira com o app do banco e atualize.'}
+        <button class="btn sec mini-b" id="v-cfg">Alterar</button> <button class="btn mini-b" id="v-real">Atualizar com o saldo real</button></p>`;
 
     if (m) {
       const t = totais(m), caixa = agora.saldo, falta = Math.max(0, t.faltaPagar - caixa), naCaixa = Math.min(caixa, t.faltaPagar);
@@ -182,13 +218,16 @@
     const linhas = [];
     for (let mm = inicio(); mm <= ultimo; mm = U.mesSoma(mm, 1)) linhas.push(mm);
     html += `<section class="bloco"><h2>Aportes mês a mês</h2>
-      <p class="sub">Por padrão entra o valor combinado todo mês. Se alguém não conseguir colocar, toque em ✏️ e coloque 0 (ou outro valor) naquele mês.</p>
+      <p class="sub">Por padrão entra o valor combinado no dia de cada um (fim de semana vira segunda-feira). Se alguém não conseguir colocar, ou depositar em outro dia, toque em ✏️ e ajuste o valor (0 = não colocou) e a data daquele mês.</p>
       <table><thead><tr><th>Mês</th><th class="v">${U.esc(n('A'))}</th><th class="v">${U.esc(n('B'))}</th><th class="v">Total</th><th></th></tr></thead><tbody>${linhas.map(mm => { const a = aporteMes(mm), fut = mm > U.mesAtual(); return `
-        <tr><td>${U.mesNome(mm)}${fut ? ' <span class="chip">previsto</span>' : ''}${a.alterado ? ' <span class="chip ambos">alterado</span>' : ''}</td><td class="v">${U.brl(a.A)}</td><td class="v">${U.brl(a.B)}</td><td class="v">${U.brl(a.A + a.B)}</td>
+        <tr><td>${U.mesNome(mm)}${a.alterado ? ' <span class="chip ambos">alterado</span>' : ''}</td>
+        <td class="v">${U.brl(a.A)}<br><span class="sub">${dataCurta(a.dA)}${a.A > 0 && a.dA > hoje ? ' · a cair' : ''}</span></td>
+        <td class="v">${U.brl(a.B)}<br><span class="sub">${dataCurta(a.dB)}${a.B > 0 && a.dB > hoje ? ' · a cair' : ''}</span></td><td class="v">${U.brl(a.A + a.B)}</td>
         <td><button class="mini" data-mes="${mm}" aria-label="Alterar aporte">✏️</button></td></tr>`; }).join('')}</tbody></table></section>`;
 
     el.innerHTML = html;
     App.$('#v-cfg').onclick = formCaixinha;
+    App.$('#v-real').onclick = formSaldoReal;
     el.querySelectorAll('[data-mes]').forEach(b => b.onclick = () => formMes(b.dataset.mes));
     el.querySelectorAll('[data-usar]').forEach(b => b.onclick = () => Store.setConfig({ viagemMetaAtiva: b.dataset.usar }));
     if (m) {
