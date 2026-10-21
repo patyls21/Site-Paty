@@ -72,6 +72,9 @@ public class MainActivity extends Activity {
         public void agendar(String planoJson) { Plano.salvar(getApplicationContext(), planoJson); }
 
         @JavascriptInterface
+        public void modo(String m) { Plano.definirModo(getApplicationContext(), m); }
+
+        @JavascriptInterface
         public void testar(String nome, String fone) { Plano.testar(getApplicationContext(), nome, fone); }
 
         /** Android 14+: deixa o alarme acender a tela por cima do bloqueio. */

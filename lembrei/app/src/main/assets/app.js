@@ -18,6 +18,8 @@ const foneBR = t => { const n = String(t).replace(/\D/g, ''); return n.length <=
 function carregar() {
   try { const d = JSON.parse(lembrar(CHAVE) || '{}'); dados = { contatos: d.contatos || [], lembretes: d.lembretes || [] }; } catch (_) {}
   $('so-app').hidden = !!window.Android;
+  $('c-modo').value = lembrar('lb-modo') === 'vibra' ? 'vibra' : 'toca';
+  if (window.Android) window.Android.modo($('c-modo').value);
   desenhar();
   enviarPlano();
 }
@@ -146,6 +148,7 @@ $('c-add').onclick = () => {
   dados.contatos.push({ nome, fone }); $('c-nome').value = ''; $('c-fone').value = '';
   salvar(); desenharContatos();
 };
+$('c-modo').onchange = () => { guardar('lb-modo', $('c-modo').value); if (window.Android) window.Android.modo($('c-modo').value); };
 $('c-bat').onclick = () => window.Android ? window.Android.abrirBateria() : toast('Só funciona no aplicativo.');
 $('c-tela').onclick = () => window.Android ? window.Android.abrirTelaCheia() : toast('Só funciona no aplicativo.');
 $('c-teste').onclick = () => {
