@@ -1,7 +1,6 @@
-// Regras do Lembrei!: quais avisos devem sair e quando. Usado pelo app (navegador) e pelo envio (Node).
+// Regras do Lembrei!: quais avisos devem sair e quando.
 // Horário de Brasília fixo em -03:00 (o Brasil não tem mais horário de verão).
 export const OFFSET = '-03:00';
-const JANELA_MS = 12 * 3600 * 1000; // avisos atrasados até 12h ainda saem (o agendador do GitHub pode demorar)
 
 export const pad = n => String(n).padStart(2, '0');
 
@@ -46,7 +45,7 @@ export function ocorrencias(l, de, ate) {
 export function textoAviso(l, diasAntes, ocorr) {
   if (l.mensagem && l.mensagem.trim()) return l.mensagem.trim();
   const quando = diasAntes === 0 ? 'Hoje' : diasAntes === 1 ? 'Amanhã' : `Em ${diasAntes} dias (${ocorr.split('-').reverse().slice(0, 2).join('/')})`;
-  return `🔔 *Lembrei!* ${quando}: ${l.titulo}`;
+  return `${quando}: ${l.titulo}`;
 }
 
 export const chave = (id, ocorr, diasAntes, hora, nome) => `${id}|${ocorr}|${diasAntes}@${hora}|${nome}`;
@@ -69,17 +68,3 @@ export function envios(lembretes, de, ate) {
   return out.sort((a, b) => a.quando - b.quando);
 }
 
-// O que precisa ser enviado agora e ainda não foi (um item por destinatário).
-export function devidos(lembretes, enviados, agora = new Date()) {
-  const hoje = hojeLocal(agora);
-  const out = [];
-  for (const e of envios(lembretes, addDias(hoje, -2), hoje)) {
-    const atraso = agora - e.quando;
-    if (atraso < 0 || atraso > JANELA_MS) continue;
-    for (const nome of e.lembrete.para || []) {
-      const k = chave(e.lembrete.id, e.ocorr, e.diasAntes, e.hora, nome);
-      if (!enviados[k]) out.push({ ...e, nome, chave: k });
-    }
-  }
-  return out;
-}

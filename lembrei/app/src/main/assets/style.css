@@ -1,4 +1,4 @@
-:root{--bg:#1a0f21;--card:#241c30;--card2:#2f2340;--border:#3d3049;--text:#ede7f3;--muted:#b3a6c2;--amarelo:#f4c53d;--realce:#7a2d8c;--lateral:#22012a;--danger:#e0685a;--ok:#6fd9a0;--fonte:"Plus Jakarta Sans",-apple-system,"Segoe UI",Roboto,sans-serif}
+:root{--bg:#1a0f21;--card:#241c30;--card2:#2f2340;--border:#3d3049;--text:#ede7f3;--muted:#b3a6c2;--amarelo:#f4c53d;--realce:#7a2d8c;--lateral:#22012a;--danger:#e0685a;--ok:#6fd9a0;--fonte:-apple-system,"Segoe UI",Roboto,sans-serif}
 *{box-sizing:border-box}[hidden]{display:none!important}
 html{color-scheme:dark}
 body{margin:0;font-family:var(--fonte);background:var(--bg);color:var(--text);line-height:1.45;padding-bottom:40px}

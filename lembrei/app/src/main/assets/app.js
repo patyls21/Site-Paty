@@ -1,47 +1,45 @@
-import { envios, hojeLocal, addDias, pad } from './logica.mjs';
+import { envios, hojeLocal, addDias, pad, chave } from './logica.mjs';
 
 const $ = id => document.getElementById(id);
-const CAMINHO = 'lembrei/data/lembretes.json';
-const RAMO = 'main';
-const guardar = (k, v) => { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (_) {} };
+const CHAVE = 'lb-dados';
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
 const lembrar = k => { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } };
 
-let dados = { contatos: [], lembretes: [] };
-let sha = null;
+let dados = { contatos: [], lembretes: [] }; // contatos: [{nome, fone}]
 let editando = null; // lembrete em edição (ou null = novo)
 
-const repo = () => lembrar('lb-repo') || 'patyls21/Site-Paty';
-const token = () => lembrar('lb-token');
-const api = (p, o = {}) => fetch(`https://api.github.com/repos/${repo()}/${p}`, {
-  ...o, headers: { Accept: 'application/vnd.github+json', ...(token() ? { Authorization: `Bearer ${token()}` } : {}), ...(o.headers || {}) },
-});
-
 function toast(t) { const e = $('toast'); e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => e.hidden = true, 3500); }
-const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g, '')), c => c.charCodeAt(0)));
-const b64enc = s => { let r = ''; new TextEncoder().encode(s).forEach(b => r += String.fromCharCode(b)); return btoa(r); };
 const novoId = () => Math.random().toString(36).slice(2, 10);
 const dataBR = d => d.split('-').reverse().join('/');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const nomes = () => dados.contatos.map(c => c.nome);
+const foneBR = t => { const n = String(t).replace(/\D/g, ''); return n.length <= 11 ? '55' + n : n; };
 
-async function carregar() {
-  const r = await api(`contents/${CAMINHO}?ref=${RAMO}&t=${Date.now()}`);
-  if (!r.ok) { $('aviso').hidden = false; $('aviso').textContent = `Não consegui carregar os lembretes (${r.status}). Confira o repositório e o token em ⚙.`; return; }
-  const j = await r.json();
-  sha = j.sha;
-  const d = JSON.parse(b64dec(j.content));
-  dados = { contatos: d.contatos || [], lembretes: d.lembretes || [] };
-  $('aviso').hidden = true;
+function carregar() {
+  try { const d = JSON.parse(lembrar(CHAVE) || '{}'); dados = { contatos: d.contatos || [], lembretes: d.lembretes || [] }; } catch (_) {}
+  $('so-app').hidden = !!window.Android;
   desenhar();
+  enviarPlano();
 }
 
-async function salvar(msg) {
-  if (!token()) { toast('Coloque o token do GitHub em ⚙ para salvar.'); throw new Error('sem token'); }
-  const corpo = { message: `Lembrei: ${msg}`, branch: RAMO, sha, content: b64enc(JSON.stringify(dados, null, 2) + '\n') };
-  const r = await api(`contents/${CAMINHO}`, { method: 'PUT', body: JSON.stringify(corpo) });
-  if (r.status === 409 || r.status === 422) { await carregar(); toast('Mudou em outro lugar. Recarreguei, tente de novo.'); throw new Error('conflito'); }
-  if (!r.ok) { toast(`Não salvou (${r.status}).`); throw new Error('falha'); }
-  sha = (await r.json()).content.sha;
+// Entrega ao Android os próximos avisos (90 dias); ele agenda os alarmes e mostra as notificações.
+function enviarPlano() {
+  if (!window.Android) return;
+  const hoje = hojeLocal(), agora = new Date(), plano = [];
+  for (const e of envios(dados.lembretes, hoje, addDias(hoje, 90))) {
+    if (e.quando <= agora) continue;
+    for (const nome of e.lembrete.para || []) {
+      const c = dados.contatos.find(x => x.nome === nome);
+      if (c) plano.push({ t: e.quando.getTime(), k: chave(e.lembrete.id, e.ocorr, e.diasAntes, e.hora, nome), titulo: e.lembrete.titulo, nome, fone: foneBR(c.fone), texto: e.texto });
+    }
+  }
+  window.Android.agendar(JSON.stringify(plano));
+}
+
+function salvar() {
+  guardar(CHAVE, JSON.stringify(dados));
   desenhar();
+  enviarPlano();
 }
 
 function resumoRepete(l) {
@@ -78,7 +76,7 @@ function linhaAviso(a = { diasAntes: 0, hora: '08:00' }) {
 }
 function desenharPara(sel) {
   $('f-para').innerHTML = dados.contatos.length ? '' : '<span class="mini">Cadastre as pessoas em ⚙ primeiro.</span>';
-  for (const n of dados.contatos) {
+  for (const n of nomes()) {
     const l = document.createElement('label'); l.className = 'chip';
     l.innerHTML = `<input type="checkbox" value="${esc(n)}" ${sel.includes(n) ? 'checked' : ''}> ${esc(n)}`;
     $('f-para').appendChild(l);
@@ -120,44 +118,40 @@ $('f').onsubmit = async ev => {
     data: $('f-data').value, repete: rep ? { cada: Math.max(1, +$('f-cada').value || 1), unidade: $('f-unid').value } : undefined,
     fim: rep && $('f-fim').value ? $('f-fim').value : undefined, avisos, para, ativo: $('f-ativo').checked,
   };
-  const antes = JSON.stringify(dados);
   if (editando) dados.lembretes[dados.lembretes.indexOf(editando)] = l; else dados.lembretes.push(l);
-  try { await salvar(`${editando ? 'editar' : 'novo'} "${l.titulo}"`); $('d-form').close(); toast('Salvo ✔'); }
-  catch (_) { dados = JSON.parse(antes); desenhar(); }
+  salvar(); $('d-form').close(); toast('Salvo ✔');
 };
-$('f-del').onclick = async () => {
+$('f-del').onclick = () => {
   if (!confirm(`Excluir "${editando.titulo}"?`)) return;
-  const antes = JSON.stringify(dados);
   dados.lembretes = dados.lembretes.filter(x => x !== editando);
-  try { await salvar(`excluir "${editando.titulo}"`); $('d-form').close(); }
-  catch (_) { dados = JSON.parse(antes); desenhar(); }
+  salvar(); $('d-form').close();
 };
 
 // ---- configurações ----
 function desenharContatos() {
   $('c-contatos').innerHTML = dados.contatos.length ? '' : '<span class="mini">Ninguém ainda.</span>';
-  for (const n of dados.contatos) {
-    const c = document.createElement('span'); c.className = 'chip';
-    c.innerHTML = `${esc(n)}<button type="button" aria-label="Remover ${esc(n)}">✕</button>`;
-    c.querySelector('button').onclick = () => { dados.contatos = dados.contatos.filter(x => x !== n); desenharContatos(); };
-    $('c-contatos').appendChild(c);
+  for (const c of dados.contatos) {
+    const el = document.createElement('span'); el.className = 'chip';
+    el.innerHTML = `${esc(c.nome)} · ${esc(c.fone)}<button type="button" aria-label="Remover ${esc(c.nome)}">✕</button>`;
+    el.querySelector('button').onclick = () => { dados.contatos = dados.contatos.filter(x => x !== c); salvar(); desenharContatos(); };
+    $('c-contatos').appendChild(el);
   }
 }
-$('b-config').onclick = () => { $('c-repo').value = repo(); $('c-token').value = token(); desenharContatos(); $('d-config').showModal(); };
-$('c-fechar').onclick = () => { $('d-config').close(); carregar(); };
-$('c-add').onclick = () => { const n = $('c-novo').value.trim(); if (n && !dados.contatos.includes(n)) dados.contatos.push(n); $('c-novo').value = ''; desenharContatos(); };
-$('c').onsubmit = async ev => {
-  ev.preventDefault();
-  guardar('lb-repo', $('c-repo').value.trim() || undefined); guardar('lb-token', $('c-token').value.trim() || undefined);
-  try { await salvar('pessoas'); $('d-config').close(); toast('Salvo ✔'); } catch (_) {}
+$('b-config').onclick = () => { desenharContatos(); $('d-config').showModal(); };
+$('c-fechar').onclick = () => $('d-config').close();
+$('c-add').onclick = () => {
+  const nome = $('c-nome').value.trim(), fone = $('c-fone').value.trim();
+  if (!nome || foneBR(fone).length < 12) return toast('Informe o nome e o WhatsApp com DDD.');
+  if (dados.contatos.some(c => c.nome === nome)) return toast('Já existe alguém com esse nome.');
+  dados.contatos.push({ nome, fone }); $('c-nome').value = ''; $('c-fone').value = '';
+  salvar(); desenharContatos();
 };
-$('c-teste').onclick = async () => {
-  const nome = prompt(`Mandar teste para quem?\n${dados.contatos.join(', ')}`);
-  if (!nome) return;
-  guardar('lb-repo', $('c-repo').value.trim() || undefined); guardar('lb-token', $('c-token').value.trim() || undefined);
-  const r = await api('actions/workflows/lembrei.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: RAMO, inputs: { teste_para: nome.trim() } }) });
-  toast(r.ok ? 'Teste pedido. Chega em ~1 minuto.' : `Não consegui pedir o teste (${r.status}). O token precisa de Actions: Read and write.`);
+$('c-bat').onclick = () => window.Android ? window.Android.abrirBateria() : toast('Só funciona no aplicativo.');
+$('c-teste').onclick = () => {
+  const c = dados.contatos[0];
+  if (!c) return toast('Cadastre alguém primeiro.');
+  if (!window.Android) return toast('Só funciona no aplicativo.');
+  window.Android.testar(c.nome, foneBR(c.fone)); toast('Teste enviado: veja a notificação.');
 };
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 carregar();
