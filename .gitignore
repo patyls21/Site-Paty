@@ -12,3 +12,9 @@ lembrei/.gradle/
 lembrei/build/
 lembrei/app/build/
 lembrei/local.properties
+
+graduacao-app/.gradle/
+graduacao-app/build/
+graduacao-app/app/build/
+graduacao-app/app/src/main/assets/
+graduacao-app/local.properties
