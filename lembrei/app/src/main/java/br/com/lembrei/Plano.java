@@ -139,7 +139,7 @@ final class Plano {
         ch.enableVibration(true);
         ch.setVibrationPattern(VIBRA);
         ch.setBypassDnd(true);
-        ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        ch.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
         nm.createNotificationChannel(ch);
         return id;
     }
@@ -181,7 +181,9 @@ final class Plano {
                 .setFullScreenIntent(cheia, true)
                 .setCategory(Notification.CATEGORY_ALARM)
                 .setPriority(Notification.PRIORITY_MAX)
-                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .setPublicVersion(construtor(c, canal).setSmallIcon(android.R.drawable.ic_popup_reminder)
+                        .setContentTitle("⏰ Lembrete").setContentText("Desbloqueie para ver").build())
                 .setAutoCancel(true)
                 .addAction(0, "Enviar agora", enviarAgora)
                 .addAction(0, "Adiar 10 min", adiar);
