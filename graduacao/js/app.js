@@ -399,8 +399,10 @@ function carregaScript(src) {
   return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('Não consegui carregar o leitor de PDF (verifique a internet).')); document.head.appendChild(s); });
 }
 async function lerPdf(file) {
-  if (!window.pdfjsLib) await carregaScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
-  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  let base = 'lib/';
+  if (!window.pdfjsLib) { try { await carregaScript(base + 'pdf.min.js'); } catch (_) { base = CDN; await carregaScript(CDN + 'pdf.min.js'); } }
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js';
   const doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   const pages = [];
   for (let i = 1; i <= doc.numPages; i++) {
@@ -439,7 +441,8 @@ function aviso(t) {
   el.textContent = t; clearTimeout(aviso.t); aviso.t = setTimeout(() => el.remove(), 4500);
 }
 function arquivoPorDialogo(accept, cb) {
-  const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.onchange = () => cb(i.files[0]); i.click();
+  const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.style.display = 'none'; document.body.appendChild(i);
+  i.onchange = () => { cb(i.files[0]); i.remove(); }; i.click();
 }
 
 // ---------- eventos ----------
@@ -456,10 +459,11 @@ document.addEventListener('click', e => {
     case 'blk-del': S.horario = S.horario.filter(x => x.id !== d.id); mudou(); break;
     case 'chk-del': S.checklist = S.checklist.filter(x => x.id !== d.id); mudou(); break;
     case 'export': {
+      if (window.Android && window.Android.compartilhar) { window.Android.compartilhar('Backup Minha Graduação', JSON.stringify(S)); break; }
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' }));
       a.download = 'minha-graduacao-backup.json'; a.click(); break;
     }
-    case 'import': arquivoPorDialogo('application/json', async f => { try { const j = JSON.parse(await f.text()); if (!j.carga || !j.historico) throw 0; S = j; mudou(); aviso('Backup importado.'); } catch (_) { aviso('Arquivo de backup inválido.'); } }); break;
+    case 'import': arquivoPorDialogo('application/json,text/plain,.json,.txt', async f => { try { const j = JSON.parse(await f.text()); if (!j.carga || !j.historico) throw 0; S = j; mudou(); aviso('Backup importado.'); } catch (_) { aviso('Arquivo de backup inválido.'); } }); break;
     case 'reset': if (confirm('Voltar para os dados originais? Isso apaga o que você marcou e digitou.')) { S = clone(window.SEED); mudou(); } break;
     default: break;
   }
