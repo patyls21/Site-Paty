@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#22012a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Lembrei!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<header>
+  <svg class="onda" viewBox="0 0 700 180" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
+    <path d="M0 80 C120 20 220 110 340 60 S560 30 700 70" fill="none" stroke="#f4c53d" stroke-width="2" opacity=".8"/>
+    <circle cx="340" cy="60" r="4" fill="#f4c53d"/>
+  </svg>
+  <div class="hero">
+    <div class="crumb">Mensagens pelo WhatsApp</div>
+    <h1>Lembrei! 🔔</h1>
+    <p id="sub">Avisos que se repetem ou saem uma vez só, na hora certa.</p>
+  </div>
+  <div class="topbtns"><button id="b-config" title="Configurações" aria-label="Configurações">⚙</button></div>
+</header>
+
+<main>
+  <div id="aviso" class="caixa" hidden></div>
+  <div class="barra"><h2>Meus lembretes</h2><button class="primario" id="b-novo">＋ Novo</button></div>
+  <div id="lista"></div>
+  <h2>Próximos avisos</h2>
+  <div id="proximos"></div>
+</main>
+
+<dialog id="d-form">
+  <form method="dialog" id="f">
+    <h3 id="f-titulo">Novo lembrete</h3>
+    <label>O que lembrar
+      <input id="f-titulo-txt" required placeholder="Banho do cachorro 🐶"></label>
+    <label>Mensagem (opcional — se vazio, uso “Amanhã: …” / “Hoje: …”)
+      <textarea id="f-msg" rows="2" placeholder="Pai, mãe: não saiam hoje, o Thor tem banho!"></textarea></label>
+    <div class="linha">
+      <label>Primeira data<input type="date" id="f-data" required></label>
+    </div>
+    <div class="linha">
+      <label>Repete?
+        <select id="f-rep"><option value="">Não, só uma vez</option><option value="1">Todo(a)…</option></select></label>
+      <label id="f-cada-w" hidden>A cada
+        <span class="duplo"><input type="number" id="f-cada" min="1" value="15">
+        <select id="f-unid"><option value="dias">dias</option><option value="semanas">semanas</option><option value="meses">meses</option><option value="anos">anos</option></select></span></label>
+    </div>
+    <label id="f-fim-w" hidden>Parar de repetir em (opcional)<input type="date" id="f-fim"></label>
+    <fieldset><legend>Quando avisar</legend>
+      <div id="f-avisos"></div>
+      <button type="button" class="sec" id="f-add-aviso">＋ Outro horário</button>
+    </fieldset>
+    <fieldset><legend>Quem recebe</legend><div id="f-para" class="chips"></div></fieldset>
+    <label class="inline"><input type="checkbox" id="f-ativo" checked> Ativo</label>
+    <div class="acoes">
+      <button type="button" class="perigo" id="f-del" hidden>Excluir</button>
+      <span style="flex:1"></span>
+      <button type="button" class="sec" id="f-cancel">Cancelar</button>
+      <button class="primario" id="f-salvar" type="submit">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="d-config">
+  <form method="dialog" id="c">
+    <h3>Configurações</h3>
+    <label>Repositório<input id="c-repo" placeholder="patyls21/Site-Paty"></label>
+    <label>Token do GitHub (fica só neste aparelho)<input id="c-token" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+    <p class="mini">Crie em GitHub › Settings › Developer settings › Fine-grained tokens, só para este repositório, com <b>Contents: Read and write</b> e <b>Actions: Read and write</b>.</p>
+    <fieldset><legend>Pessoas que recebem</legend>
+      <div id="c-contatos" class="chips"></div>
+      <div class="linha"><input id="c-novo" placeholder="Nome (ex.: Mãe)"><button type="button" class="sec" id="c-add">Adicionar</button></div>
+      <p class="mini">Só o nome fica aqui. O telefone vai no Secret <code>LEMBREI_CONTATOS</code> do GitHub (veja o LEIAME).</p>
+    </fieldset>
+    <div class="acoes">
+      <button type="button" class="sec" id="c-teste">Enviar teste…</button>
+      <span style="flex:1"></span>
+      <button type="button" class="sec" id="c-fechar">Fechar</button>
+      <button class="primario" type="submit">Salvar</button>
+    </div>
+  </form>
+</dialog>
+<div id="toast" hidden></div>
+<script type="module" src="app.js?v=1"></script>
+</body>
+</html>
