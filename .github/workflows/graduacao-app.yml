@@ -1,6 +1,6 @@
-name: Montar app Minha Graduação
+name: Montar app Universidade
 
-# Monta o aplicativo "Minha Graduação" (arquivo .apk) e publica na página de Releases.
+# Monta o aplicativo "Universidade" (arquivo .apk) e publica na página de Releases.
 # Roda sozinho quando algo em graduacao/ ou graduacao-app/ muda, ou manualmente em Actions > Run workflow.
 on:
   workflow_dispatch:
@@ -38,20 +38,20 @@ jobs:
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Nomear o arquivo
-        run: cp graduacao-app/app/build/outputs/apk/debug/app-debug.apk minha-graduacao.apk
+        run: cp graduacao-app/app/build/outputs/apk/debug/app-debug.apk universidade.apk
 
       - name: Publicar na página de Releases
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: app-graduacao
-          name: App Minha Graduação
-          body: Aplicativo Android do Minha Graduação. Baixe o arquivo minha-graduacao.apk e instale no celular.
-          files: minha-graduacao.apk
+          name: App Universidade
+          body: Aplicativo Android Universidade. Baixe o arquivo universidade.apk e instale no celular.
+          files: universidade.apk
 
       - name: Guardar o APK (para testes fora da main)
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: minha-graduacao-apk
-          path: minha-graduacao.apk
+          name: universidade-apk
+          path: universidade.apk

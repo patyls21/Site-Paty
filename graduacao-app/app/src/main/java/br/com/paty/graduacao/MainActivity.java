@@ -17,7 +17,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
 /**
- * Casca do app Minha Graduação: mostra as páginas guardadas dentro do próprio app (nada vem da internet)
+ * Casca do app Universidade: mostra as páginas guardadas dentro do próprio app (nada vem da internet)
  * e abre o seletor de arquivos para o PDF do histórico. Os dados ficam só neste aparelho (localStorage).
  */
 public class MainActivity extends Activity {

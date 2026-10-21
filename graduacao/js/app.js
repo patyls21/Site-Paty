@@ -459,9 +459,9 @@ document.addEventListener('click', e => {
     case 'blk-del': S.horario = S.horario.filter(x => x.id !== d.id); mudou(); break;
     case 'chk-del': S.checklist = S.checklist.filter(x => x.id !== d.id); mudou(); break;
     case 'export': {
-      if (window.Android && window.Android.compartilhar) { window.Android.compartilhar('Backup Minha Graduação', JSON.stringify(S)); break; }
+      if (window.Android && window.Android.compartilhar) { window.Android.compartilhar('Backup Universidade', JSON.stringify(S)); break; }
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' }));
-      a.download = 'minha-graduacao-backup.json'; a.click(); break;
+      a.download = 'universidade-backup.json'; a.click(); break;
     }
     case 'import': arquivoPorDialogo('application/json,text/plain,.json,.txt', async f => { try { const j = JSON.parse(await f.text()); if (!j.carga || !j.historico) throw 0; S = j; mudou(); aviso('Backup importado.'); } catch (_) { aviso('Arquivo de backup inválido.'); } }); break;
     case 'reset': if (confirm('Voltar para os dados originais? Isso apaga o que você marcou e digitou.')) { S = clone(window.SEED); mudou(); } break;
