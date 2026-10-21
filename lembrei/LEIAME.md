@@ -18,5 +18,6 @@ Para quem recebe, a mensagem vem do seu número, escrita por você.
 - Não envia sozinho: pede o seu toque (o WhatsApp não permite envio automático sem recursos de acessibilidade).
 - O celular precisa estar ligado. Avisos que passaram com ele desligado aparecem ao ligar (até 12h depois).
 - O app programa 90 dias à frente; abra-o de vez em quando. Perto do fim ele avisa para renovar.
+- Em ⚙ › **Como avisar** dá para escolher “Tocar e vibrar” ou “Só vibrar”.
 - O som usa o volume de alarme do celular (e o alarme ignora o “não perturbe” se você permitir).
 - Se limpar os dados do app, os lembretes somem.

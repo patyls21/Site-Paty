@@ -24,7 +24,8 @@ import org.json.JSONObject;
 final class Plano {
 
     private static final String PREFS = "plano";
-    private static final String CANAL = "alarme";
+    private static final String CANAL_SOM = "alarme";
+    private static final String CANAL_VIBRA = "alarme_vibra";
     private static final long[] VIBRA = {0, 800, 400, 800, 400, 800, 400, 800};
     private static final long JANELA_MS = 12L * 3600 * 1000; // aviso atrasado (celular desligado) ainda aparece por 12h
 
@@ -116,27 +117,42 @@ final class Plano {
         mostrar(c, "teste" + System.currentTimeMillis(), "Teste do Lembrei!", nome, fone, "✅ Teste do Lembrei!");
     }
 
-    private static void criarCanal(NotificationManager nm) {
-        if (Build.VERSION.SDK_INT < 26) return;
-        NotificationChannel ch = new NotificationChannel(CANAL, "Alarme dos lembretes", NotificationManager.IMPORTANCE_HIGH);
-        ch.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), new AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+    /** "toca" (som + vibração, padrão) ou "vibra" (só vibração). */
+    static void definirModo(Context c, String modo) {
+        prefs(c).edit().putString("modo", "vibra".equals(modo) ? "vibra" : "toca").apply();
+    }
+
+    private static boolean soVibra(Context c) { return "vibra".equals(prefs(c).getString("modo", "toca")); }
+
+    /** O som de um canal não muda depois de criado, por isso há um canal para cada modo. */
+    private static String criarCanal(Context c, NotificationManager nm) {
+        boolean vibra = soVibra(c);
+        String id = vibra ? CANAL_VIBRA : CANAL_SOM;
+        if (Build.VERSION.SDK_INT < 26) return id;
+        NotificationChannel ch = new NotificationChannel(id, vibra ? "Alarme dos lembretes (só vibra)" : "Alarme dos lembretes", NotificationManager.IMPORTANCE_HIGH);
+        if (vibra) {
+            ch.setSound(null, null);
+        } else {
+            ch.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+        }
         ch.enableVibration(true);
         ch.setVibrationPattern(VIBRA);
         ch.setBypassDnd(true);
         ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         nm.createNotificationChannel(ch);
+        return id;
     }
 
-    private static Notification.Builder construtor(Context c) {
-        return Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, CANAL) : new Notification.Builder(c);
+    private static Notification.Builder construtor(Context c, String canal) {
+        return Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, canal) : new Notification.Builder(c);
     }
 
     /** Alarme: toca e vibra até você tocar, com tela cheia por cima do bloqueio e botões de abrir/adiar. */
     private static void mostrar(Context c, String k, String titulo, String nome, String fone, String texto) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
-        criarCanal(nm);
+        String canal = criarCanal(c, nm);
         int id = k.hashCode();
         int imut = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
 
@@ -152,7 +168,7 @@ final class Plano {
                 .putExtra("titulo", titulo).putExtra("nome", nome).putExtra("fone", fone).putExtra("texto", texto);
         PendingIntent adiar = PendingIntent.getBroadcast(c, id, soneca, imut);
 
-        Notification.Builder b = construtor(c);
+        Notification.Builder b = construtor(c, canal);
         b.setSmallIcon(android.R.drawable.ic_popup_reminder)
                 .setContentTitle("⏰ " + titulo)
                 .setContentText("Mandar para " + nome + " — toque para abrir o WhatsApp")
@@ -165,7 +181,8 @@ final class Plano {
                 .setAutoCancel(true)
                 .addAction(0, "Adiar 10 min", adiar);
         if (Build.VERSION.SDK_INT < 26) {
-            b.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), android.media.AudioManager.STREAM_ALARM).setVibrate(VIBRA);
+            if (!soVibra(c)) b.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), android.media.AudioManager.STREAM_ALARM);
+            b.setVibrate(VIBRA);
         }
         Notification n = b.build();
         n.flags |= Notification.FLAG_INSISTENT; // repete o som até a notificação ser tocada ou dispensada
@@ -175,9 +192,9 @@ final class Plano {
     private static void avisoSimples(Context c, int id, String titulo, String texto) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
-        criarCanal(nm);
+        String canal = criarCanal(c, nm);
         PendingIntent abrir = PendingIntent.getActivity(c, id, new Intent(c, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        nm.notify(id, construtor(c).setSmallIcon(android.R.drawable.ic_popup_reminder).setContentTitle(titulo)
+        nm.notify(id, construtor(c, canal).setSmallIcon(android.R.drawable.ic_popup_reminder).setContentTitle(titulo)
                 .setContentText(texto).setContentIntent(abrir).setAutoCancel(true).build());
     }
 
