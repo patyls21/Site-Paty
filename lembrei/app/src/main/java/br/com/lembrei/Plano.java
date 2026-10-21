@@ -168,6 +168,10 @@ final class Plano {
                 .putExtra("titulo", titulo).putExtra("nome", nome).putExtra("fone", fone).putExtra("texto", texto);
         PendingIntent adiar = PendingIntent.getBroadcast(c, id, soneca, imut);
 
+        Intent enviar = new Intent(c, EnviarActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra("id", id).putExtra("fone", fone).putExtra("texto", texto);
+        PendingIntent enviarAgora = PendingIntent.getActivity(c, id + 1, enviar, imut);
+
         Notification.Builder b = construtor(c, canal);
         b.setSmallIcon(android.R.drawable.ic_popup_reminder)
                 .setContentTitle("⏰ " + titulo)
@@ -179,6 +183,7 @@ final class Plano {
                 .setPriority(Notification.PRIORITY_MAX)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
+                .addAction(0, "Enviar agora", enviarAgora)
                 .addAction(0, "Adiar 10 min", adiar);
         if (Build.VERSION.SDK_INT < 26) {
             if (!soVibra(c)) b.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), android.media.AudioManager.STREAM_ALARM);

@@ -1,14 +1,9 @@
 package br.com.lembrei;
 
 import android.app.Activity;
-import android.app.KeyguardManager;
-import android.content.ActivityNotFoundException;
-import android.os.Build;
-import android.widget.Toast;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.graphics.Color;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -44,7 +39,7 @@ public class AlarmeActivity extends Activity {
 
         raiz.addView(botao("Abrir WhatsApp e enviar", "#F4C53D", "#25122F", v -> {
             parar(id);
-            abrirWhats(fone, texto);
+            Whats.abrir(this, fone, texto, false);
         }));
         raiz.addView(botao("Adiar 10 min", "#5A1A73", "#FFFFFF", v -> {
             parar(id);
@@ -53,32 +48,6 @@ public class AlarmeActivity extends Activity {
         }));
         raiz.addView(botao("Dispensar", "#2F2340", "#E6D8EE", v -> { parar(id); finish(); }));
         setContentView(raiz);
-    }
-
-    /** Pede para destravar a tela (se estiver bloqueada) e só então abre o WhatsApp na conversa. */
-    private void abrirWhats(final String fone, final String texto) {
-        final Runnable abrir = () -> {
-            Uri u = Uri.parse("https://wa.me/" + fone + "?text=" + Uri.encode(texto));
-            for (String pacote : new String[]{"com.whatsapp", "com.whatsapp.w4b", null}) {
-                Intent i = new Intent(Intent.ACTION_VIEW, u).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                if (pacote != null) i.setPackage(pacote);
-                try {
-                    startActivity(i);
-                    finish();
-                    return;
-                } catch (ActivityNotFoundException | SecurityException ignorado) { }
-            }
-            Toast.makeText(this, "Não consegui abrir o WhatsApp.", Toast.LENGTH_LONG).show();
-        };
-        KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
-        if (Build.VERSION.SDK_INT >= 26 && km != null && km.isKeyguardLocked()) {
-            km.requestDismissKeyguard(this, new KeyguardManager.KeyguardDismissCallback() {
-                @Override public void onDismissSucceeded() { abrir.run(); }
-                @Override public void onDismissError() { Toast.makeText(AlarmeActivity.this, "Desbloqueie o celular e toque de novo.", Toast.LENGTH_LONG).show(); }
-            });
-        } else {
-            abrir.run();
-        }
     }
 
     private void parar(int id) {

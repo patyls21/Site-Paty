@@ -35,6 +35,14 @@
             android:turnScreenOn="true"
             android:launchMode="singleInstance" />
 
+        <!-- botão "Enviar agora" do aviso (janela invisível) -->
+        <activity
+            android:name=".EnviarActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- alarme dos avisos e reagendamento ao ligar o celular -->
         <receiver
             android:name=".ReceptorLembrei"
