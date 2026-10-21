@@ -74,6 +74,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void testar(String nome, String fone) { Plano.testar(getApplicationContext(), nome, fone); }
 
+        /** Android 14+: deixa o alarme acender a tela por cima do bloqueio. */
+        @JavascriptInterface
+        public void abrirTelaCheia() {
+            if (Build.VERSION.SDK_INT >= 34) {
+                runOnUiThread(() -> startActivity(new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + getPackageName()))));
+            }
+        }
+
         /** Abre a tela de bateria para o usuário marcar o app como "sem restrições" (evita avisos atrasados). */
         @JavascriptInterface
         public void abrirBateria() {

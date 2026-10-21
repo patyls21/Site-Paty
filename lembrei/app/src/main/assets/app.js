@@ -147,6 +147,7 @@ $('c-add').onclick = () => {
   salvar(); desenharContatos();
 };
 $('c-bat').onclick = () => window.Android ? window.Android.abrirBateria() : toast('Só funciona no aplicativo.');
+$('c-tela').onclick = () => window.Android ? window.Android.abrirTelaCheia() : toast('Só funciona no aplicativo.');
 $('c-teste').onclick = () => {
   const c = dados.contatos[0];
   if (!c) return toast('Cadastre alguém primeiro.');
