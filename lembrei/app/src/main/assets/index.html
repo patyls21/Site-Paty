@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#22012a">
+<title>Lembrei!</title>
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+<header>
+  <svg class="onda" viewBox="0 0 700 180" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
+    <path d="M0 80 C120 20 220 110 340 60 S560 30 700 70" fill="none" stroke="#f4c53d" stroke-width="2" opacity=".8"/>
+    <circle cx="340" cy="60" r="4" fill="#f4c53d"/>
+  </svg>
+  <div class="hero">
+    <div class="crumb">Do seu WhatsApp</div>
+    <h1>Lembrei! 🔔</h1>
+    <p id="sub">Na hora certa o celular toca como alarme e deixa a mensagem pronta.</p>
+  </div>
+  <div class="topbtns"><button id="b-config" title="Configurações" aria-label="Configurações">⚙</button></div>
+</header>
+
+<main>
+  <div id="aviso" class="caixa" hidden></div>
+  <div id="so-app" class="caixa" hidden>Abra pelo aplicativo Lembrei! no celular: é ele que dispara os avisos.</div>
+  <div class="barra"><h2>Meus lembretes</h2><button class="primario" id="b-novo">＋ Novo</button></div>
+  <div id="lista"></div>
+  <h2>Próximos avisos</h2>
+  <div id="proximos"></div>
+</main>
+
+<dialog id="d-form">
+  <form method="dialog" id="f">
+    <h3 id="f-titulo">Novo lembrete</h3>
+    <label>O que lembrar
+      <input id="f-titulo-txt" required placeholder="Banho do cachorro 🐶"></label>
+    <label>Mensagem que vai para a pessoa (opcional — se vazio: “Amanhã: …” / “Hoje: …”)
+      <textarea id="f-msg" rows="2" placeholder="Pai, mãe: não saiam hoje, o Thor tem banho!"></textarea></label>
+    <div class="linha">
+      <label>Primeira data<input type="date" id="f-data" required></label>
+    </div>
+    <div class="linha">
+      <label>Repete?
+        <select id="f-rep"><option value="">Não, só uma vez</option><option value="1">Todo(a)…</option></select></label>
+      <label id="f-cada-w" hidden>A cada
+        <span class="duplo"><input type="number" id="f-cada" min="1" value="15">
+        <select id="f-unid"><option value="dias">dias</option><option value="semanas">semanas</option><option value="meses">meses</option><option value="anos">anos</option></select></span></label>
+    </div>
+    <label id="f-fim-w" hidden>Parar de repetir em (opcional)<input type="date" id="f-fim"></label>
+    <fieldset><legend>Quando avisar</legend>
+      <div id="f-avisos"></div>
+      <button type="button" class="sec" id="f-add-aviso">＋ Outro horário</button>
+    </fieldset>
+    <fieldset><legend>Quem recebe</legend><div id="f-para" class="chips"></div></fieldset>
+    <label class="inline"><input type="checkbox" id="f-ativo" checked> Ativo</label>
+    <div class="acoes">
+      <button type="button" class="perigo" id="f-del" hidden>Excluir</button>
+      <span style="flex:1"></span>
+      <button type="button" class="sec" id="f-cancel">Cancelar</button>
+      <button class="primario" id="f-salvar" type="submit">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="d-config">
+  <form method="dialog" id="c">
+    <h3>Pessoas e ajustes</h3>
+    <fieldset><legend>Pessoas que recebem</legend>
+      <div id="c-contatos" class="chips"></div>
+      <label>Nome<input id="c-nome" placeholder="Mãe"></label>
+      <label>WhatsApp (com DDD)<input id="c-fone" type="tel" inputmode="tel" placeholder="(11) 99999-9999"></label>
+      <button type="button" class="sec" id="c-add" style="margin-top:8px">Adicionar</button>
+      <p class="mini">Os números ficam só neste celular.</p>
+    </fieldset>
+    <fieldset><legend>Para os avisos não atrasarem</legend>
+      <p class="mini">Marque o Lembrei! como “Sem restrições” na bateria e deixe as notificações ligadas.</p>
+      <div class="acoes"><button type="button" class="sec" id="c-bat">Ajustes de bateria</button><button type="button" class="sec" id="c-tela">Alarme na tela bloqueada</button><button type="button" class="sec" id="c-teste">Testar aviso</button></div>
+    </fieldset>
+    <div class="acoes"><span style="flex:1"></span><button class="primario" id="c-fechar" type="button">Pronto</button></div>
+  </form>
+</dialog>
+<div id="toast" hidden></div>
+<script type="module" src="app.js?v=2"></script>
+</body>
+</html>
