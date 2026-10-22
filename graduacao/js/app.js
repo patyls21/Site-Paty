@@ -267,7 +267,7 @@ function planner() {
   const usaSab = S.horario.some(b => b.dia === 6), nd = usaSab ? 6 : 5;
   const ini = Math.min(7 * 60, ...S.horario.map(b => Math.floor(min(b.ini) / 60) * 60));
   const fim = Math.max(21 * 60, ...S.horario.map(b => Math.ceil(min(b.fim) / 60) * 60));
-  const PX = 0.9, alt = (fim - ini) * PX, { ids } = achaConflitos();
+  const PX = window.innerWidth < 640 ? 0.68 : 0.9, alt = (fim - ini) * PX, { ids } = achaConflitos();
   let o = `<div class="planner" style="--dias:${nd};--alt:${alt}px;--hora:${60 * PX}px"><div class="hd">Hora</div>`;
   for (let d = 1; d <= nd; d++) o += `<div class="hd">${DIAS[d]}</div>`;
   o += '<div class="hrs">';
@@ -297,9 +297,9 @@ function editorHorario() {
     <td><select data-chg="blk" data-id="${b.id}" data-f="dia" aria-label="Dia">${dias(b.dia)}</select></td>
     <td><input type="time" value="${b.ini}" data-chg="blk" data-id="${b.id}" data-f="ini" aria-label="Início"></td>
     <td><input type="time" value="${b.fim}" data-chg="blk" data-id="${b.id}" data-f="fim" aria-label="Fim"></td>
-    <td><button class="btn sm danger" data-act="blk-del" data-id="${b.id}" aria-label="Remover bloco">✕</button></td></tr>`).join('');
+    <td class="x"><button class="btn sm danger" data-act="blk-del" data-id="${b.id}" aria-label="Remover bloco">✕</button></td></tr>`).join('');
   const opts = S.cursando.map(c => `<option value="${esc(c.codigo)}">${esc(c.nome)}</option>`).join('');
-  return `<details><summary>Ver / editar os ${S.horario.length} blocos</summary><div class="scroll" style="margin-top:10px"><table><tr><th>Nome no planner</th><th>Dia</th><th>Início</th><th>Fim</th><th></th></tr>${linhas}</table></div></details>
+  return `<details><summary>Ver / editar os ${S.horario.length} blocos</summary><div class="scroll" style="margin-top:10px"><table class="cartoes hor"><tr><th>Nome no planner</th><th>Dia</th><th>Início</th><th>Fim</th><th></th></tr>${linhas}</table></div></details>
   <form data-form="blk" class="form">
     <label>Matéria ou atividade<select name="ref"><option value="">Outra (digite o nome)</option><option value="@estagio">Estágio / trabalho</option>${opts}</select></label>
     <label>Nome no planner<input type="text" name="nome" placeholder="ex.: Academia"></label>
@@ -314,8 +314,8 @@ function faltam() {
   const linhas = plano.itens.map(({ p, st, sem }) => {
     const c = casaCursando(p);
     const semCel = st === 'cursando' || st === 'passei' ? `${S.semAtual}` : `<select data-chg="pend" data-code="${esc(p.codigo)}" data-f="semestre" aria-label="Semestre de ${esc(p.nome)}">${optSem(p.semestre, st === 'refazer' ? semNext(S.semAtual) + ' (padrão)' : 'a definir')}</select>${sem && sem !== p.semestre && st !== 'cursando' && st !== 'passei' ? `<div class="mut sm">efetivo: ${sem}</div>` : ''}`;
-    return `<tr class="${st === 'passei' ? 'done' : ''}"><td>${esc(p.codigo)}</td><td>${esc(p.nome)}</td><td class="n">${p.ch} h</td><td>${chipSt(st)}${c ? `<div style="margin-top:6px">${seg(c.id, c)}</div>` : ''}</td><td>${semCel}</td>
-      <td><input type="text" value="${esc(p.obs)}" data-chg="pend" data-code="${esc(p.codigo)}" data-f="obs" aria-label="Observação" style="width:100%;min-width:140px"></td></tr>`;
+    return `<tr class="${st === 'passei' ? 'done' : ''}"><td class="cod">${esc(p.codigo)}</td><td class="nome">${esc(p.nome)}</td><td class="n ch">${p.ch} h</td><td class="st">${c ? '' : chipSt(st)}${c ? `<div class="segw">${seg(c.id, c)}</div>` : ''}</td><td class="sem">${semCel}</td>
+      <td class="ob"><input type="text" value="${esc(p.obs)}" placeholder="Observação" data-chg="pend" data-code="${esc(p.codigo)}" data-f="obs" aria-label="Observação" style="width:100%;min-width:140px"></td></tr>`;
   }).join('');
   const pendH = plano.itens.filter(i => i.st !== 'passei').reduce((a, i) => a + i.p.ch, 0);
   const tl = plano.linhas.map(l => `<tr><td><b>${l.sem}</b></td><td class="n">${nf(l.obrig)}</td><td class="n">${nf(l.optat)}</td><td class="n">${nf(l.total)}</td><td class="n">${nf(l.restO)}</td><td class="n">${nf(l.restP)}</td></tr>`).join('');
@@ -324,8 +324,8 @@ function faltam() {
     <div class="card kpi"><div class="l">Obrigatórias após ${S.semAtual}</div><div class="v">${nf(plano.linhas[0].restO)} h</div><div class="s">se passar em tudo</div></div>
     <div class="card kpi"><div class="l">Optativas após ${S.semAtual}</div><div class="v">${nf(plano.linhas[0].restP)} h</div><div class="s">com o francês ${S.frances.status === 'negado' ? '(não aceito)' : 'contando'}</div></div>
     <div class="card kpi"><div class="l">Previsão</div><div class="v">${plano.previsao}</div><div class="s">${k.rep.length ? '⚠️ há reprovação marcada' : 'conforme planejado'}</div></div></div>
-  <div class="card"><h2>📚 Componentes obrigatórios pendentes</h2><div class="scroll"><table><tr><th>Código</th><th>Componente curricular</th><th class="n">CH</th><th>Status</th><th>Semestre planejado</th><th>Observação</th></tr>${linhas}</table></div></div>
-  <div class="card" style="margin-top:16px"><h2>🗓️ Planejamento por semestre</h2><div class="scroll"><table><tr><th>Semestre</th><th class="n">Obrigatórias</th><th class="n">Optativas</th><th class="n">Total</th><th class="n">Obrig. restantes</th><th class="n">Optat. restantes</th></tr>${tl}</table></div>
+  <div class="card"><h2>📚 Componentes obrigatórios pendentes</h2><div class="scroll"><table class="cartoes fal"><tr><th>Código</th><th>Componente curricular</th><th class="n">CH</th><th>Status</th><th>Semestre planejado</th><th>Observação</th></tr>${linhas}</table></div></div>
+  <div class="card" style="margin-top:16px"><h2>🗓️ Planejamento por semestre</h2><div class="scroll"><table class="compacta"><tr><th>Semestre</th><th class="n">Obrig.</th><th class="n">Optat.</th><th class="n">Total</th><th class="n">Falta O.</th><th class="n">Falta P.</th></tr>${tl}</table></div>
     <p class="mut sm" style="margin:10px 0 0">Optativas restantes dependem do que você cadastrar na aba Optativas. Obrigatória reprovada entra automaticamente no próximo semestre e empurra as que dependem dela (TCC 2, Lab. de Conversão).</p></div>`;
 }
 
@@ -339,7 +339,7 @@ function optativas() {
     <td><select data-chg="opt" data-id="${o.id}" data-f="status" aria-label="Status">${['Pretendida', 'Planejada', 'Em curso', 'Concluída', 'Não aprovada'].map(s => `<option ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
     <td><select data-chg="opt" data-id="${o.id}" data-f="semestre" aria-label="Semestre">${optSem(o.semestre)}</select></td>
     <td><input type="text" value="${esc(o.obs || '')}" data-chg="opt" data-id="${o.id}" data-f="obs" aria-label="Observação"></td>
-    <td><button class="btn sm danger" data-act="opt-del" data-id="${o.id}" aria-label="Remover">✕</button></td></tr>`).join('');
+    <td class="x"><button class="btn sm danger" data-act="opt-del" data-id="${o.id}" aria-label="Remover">✕</button></td></tr>`).join('');
   const cobertas = k.feito.optat + k.emCurso.optat + k.futuras + k.frAnalise;
   return `<div class="grid g4" style="margin-bottom:16px">
     <div class="card kpi"><div class="l">Exigidas</div><div class="v">${nf(ex.optat)} h</div></div>
@@ -352,7 +352,7 @@ function optativas() {
     <p class="sm" style="margin:10px 0 0">${fr.status === 'analise' ? 'Em análise: pode não ser aceito. O painel mostra os dois cenários (com e sem as 120 h).' : fr.status === 'aceito' ? 'Aceito: as horas já contam como integralizadas.' : 'Não aceito: as horas não contam. Complete com outras optativas.'}</p></div>
   <div class="grid g2">
     <div class="card"><h2>🧩 Optativas que preciso pegar <small>digite à mão</small></h2>
-      ${S.optativas.length ? `<div class="scroll"><table><tr><th>Disciplina / atividade</th><th>CH</th><th>Status</th><th>Semestre</th><th>Obs.</th><th></th></tr>${man}</table></div>` : '<p class="mut">Nenhuma ainda. Adicione abaixo as optativas que pretende cursar.</p>'}
+      ${S.optativas.length ? `<div class="scroll"><table class="cartoes opt"><tr><th>Disciplina / atividade</th><th>CH</th><th>Status</th><th>Semestre</th><th>Obs.</th><th></th></tr>${man}</table></div>` : '<p class="mut">Nenhuma ainda. Adicione abaixo as optativas que pretende cursar.</p>'}
       <form data-form="opt" class="form"><label class="wide">Nome<input type="text" name="nome" required placeholder="ex.: Energias Renováveis"></label>
         <label>CH<input type="number" name="ch" min="0" step="15" value="60" required></label>
         <label>Semestre<select name="semestre">${optSem(semNext(S.semAtual))}</select></label>
@@ -382,13 +382,13 @@ function historico() {
   <div class="card" style="margin-top:16px"><h2>🗂️ Componentes cursados <label class="sm mut" style="margin-left:auto;font-weight:500"><input type="checkbox" data-act="verrep" ${filtro ? 'checked' : ''}> mostrar reprovações e trancamentos</label></h2>${lista}</div>`;
 }
 
-const ABAS = { painel: ['📊 Painel', painel], semestre: ['💜 Semestre', semestre], faltam: ['📚 O que falta', faltam], optativas: ['🧩 Optativas', optativas], historico: ['🗂️ Histórico', historico] };
+const ABAS = { painel: ['📊 Painel', painel], semestre: ['💜 Semestre', semestre], faltam: ['📚 Falta', faltam], optativas: ['🧩 Optativas', optativas], historico: ['🗂️ Histórico', historico] };
 
 function render() {
   if (!ABAS[aba]) aba = 'painel';
   const a = S.aluno || {};
   $('#sub').textContent = a.nome ? `${a.nome} · ${a.curso || ''} · matrícula ${a.matricula} · IRA ${a.ira}` : 'Planejamento da graduação';
-  $('#tabs').innerHTML = Object.entries(ABAS).map(([k, [t]]) => `<button role="tab" data-tab="${k}" aria-selected="${k === aba}">${t}</button>`).join('');
+  $('#tabs').innerHTML = Object.entries(ABAS).map(([k, [t]]) => { const [ic, ...r] = t.split(' '); return `<button role="tab" data-tab="${k}" aria-selected="${k === aba}"><i>${ic}</i><span>${r.join(' ')}</span></button>`; }).join('');
   const y = window.scrollY;
   $('#app').innerHTML = S.historico && S.historico.length ? ABAS[aba][1]() : vazio();
   window.scrollTo(0, y);
