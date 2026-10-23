@@ -1,6 +1,6 @@
 # Lembrei! 🔔 (app Android)
 
-Lembretes que se repetem (ex.: banho do cachorro a cada 15 dias, avisando na véspera às 20h e no dia às 8h) ou mensagens agendadas.
+Lembretes que se repetem (a cada N dias/semanas/meses, ou em dias da semana, ex.: segunda e quarta; ex.: banho do cachorro a cada 15 dias, avisando na véspera às 20h e no dia às 8h) ou mensagens agendadas.
 Na hora certa o celular **toca e vibra como um alarme** (som de alarme que repete até você mexer, tela acesa mesmo bloqueada, botões Abrir WhatsApp / Adiar 10 min); ao tocar, abre o **seu** WhatsApp na conversa da pessoa com o texto pronto, e você só toca em enviar.
 Para quem recebe, a mensagem vem do seu número, escrita por você.
 

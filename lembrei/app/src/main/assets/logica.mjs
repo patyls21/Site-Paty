@@ -28,10 +28,23 @@ function passo(data, k, cada, unidade) {
   return addDias(data, n);
 }
 
+export const diaDaSemana = data => utc(data).getUTCDay(); // 0 = domingo ... 6 = sábado
+export const NOMES_DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
 // Datas em que o lembrete "acontece", entre de e ate (inclusive).
+// repete: { cada, unidade } (a cada N dias/semanas/meses/anos) ou { dias: [1, 3], cada: 1 } (nesses dias da semana, a cada N semanas).
 export function ocorrencias(l, de, ate) {
   const fim = l.fim && l.fim < ate ? l.fim : ate;
   const r = l.repete;
+  if (r && r.dias && r.dias.length) {
+    const cada = Math.max(1, r.cada || 1), base = addDias(l.data, -diaDaSemana(l.data));
+    const out = [];
+    for (let d = l.data, n = 0; d <= fim && n < 20000; d = addDias(d, 1), n++) {
+      const semana = Math.round((utc(d) - utc(base)) / (7 * 86400000));
+      if (d >= de && r.dias.includes(diaDaSemana(d)) && semana % cada === 0) out.push(d);
+    }
+    return out;
+  }
   if (!r || !r.cada || r.cada < 1) return l.data >= de && l.data <= fim ? [l.data] : [];
   const out = [];
   for (let k = 0; k < 20000; k++) {
