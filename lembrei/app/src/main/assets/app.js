@@ -1,4 +1,4 @@
-import { envios, hojeLocal, addDias, pad, chave } from './logica.mjs';
+import { envios, hojeLocal, addDias, pad, chave, NOMES_DIAS } from './logica.mjs';
 
 const $ = id => document.getElementById(id);
 const CHAVE = 'lb-dados';
@@ -46,6 +46,7 @@ function salvar() {
 
 function resumoRepete(l) {
   const r = l.repete;
+  if (r && r.dias) return `${(r.cada || 1) > 1 ? `a cada ${r.cada} semanas, ` : 'toda semana, '}${r.dias.map(d => NOMES_DIAS[d]).join(' e ')}`;
   return r ? `a cada ${r.cada} ${r.unidade}` : `uma vez, ${dataBR(l.data)}`;
 }
 function resumoAviso(a) { return `${a.diasAntes === 0 ? 'no dia' : a.diasAntes === 1 ? 'na véspera' : a.diasAntes + ' dias antes'} às ${a.hora}`; }
@@ -90,7 +91,9 @@ function abrirForm(l) {
   $('f-titulo-txt').value = l?.titulo || '';
   $('f-msg').value = l?.mensagem || '';
   $('f-data').value = l?.data || hojeLocal();
-  $('f-rep').value = l?.repete ? '1' : '';
+  $('f-rep').value = l?.repete?.dias ? '2' : l?.repete ? '1' : '';
+  $('f-sem').value = l?.repete?.cada || 1;
+  desenharDias(l?.repete?.dias || []);
   $('f-cada').value = l?.repete?.cada || 15;
   $('f-unid').value = l?.repete?.unidade || 'dias';
   $('f-fim').value = l?.fim || '';
@@ -102,7 +105,18 @@ function abrirForm(l) {
   mostrarRep();
   $('d-form').showModal();
 }
-function mostrarRep() { const r = $('f-rep').value === '1'; $('f-cada-w').hidden = !r; $('f-fim-w').hidden = !r; }
+function desenharDias(sel) {
+  $('f-dias').innerHTML = '';
+  NOMES_DIAS.forEach((n, i) => {
+    const l = document.createElement('label'); l.className = 'chip';
+    l.innerHTML = `<input type="checkbox" value="${i}" ${sel.includes(i) ? 'checked' : ''}> ${n}`;
+    $('f-dias').appendChild(l);
+  });
+}
+function mostrarRep() {
+  const v = $('f-rep').value;
+  $('f-cada-w').hidden = v !== '1'; $('f-dias-w').hidden = v !== '2'; $('f-fim-w').hidden = !v;
+}
 $('f-rep').onchange = mostrarRep;
 $('f-add-aviso').onclick = () => linhaAviso();
 $('f-cancel').onclick = () => $('d-form').close();
@@ -114,10 +128,13 @@ $('f').onsubmit = async ev => {
   const para = [...$('f-para').querySelectorAll('input:checked')].map(i => i.value);
   if (!avisos.length) return toast('Escolha ao menos um horário de aviso.');
   if (!para.length) return toast('Escolha quem recebe.');
-  const rep = $('f-rep').value === '1';
+  const modo = $('f-rep').value, rep = !!modo;
+  const dias = [...$('f-dias').querySelectorAll('input:checked')].map(i => +i.value);
+  if (modo === '2' && !dias.length) return toast('Escolha ao menos um dia da semana.');
   const l = {
     id: editando?.id || novoId(), titulo: $('f-titulo-txt').value.trim(), mensagem: $('f-msg').value.trim() || undefined,
-    data: $('f-data').value, repete: rep ? { cada: Math.max(1, +$('f-cada').value || 1), unidade: $('f-unid').value } : undefined,
+    data: $('f-data').value, repete: modo === '2' ? { dias, cada: Math.max(1, +$('f-sem').value || 1) }
+      : rep ? { cada: Math.max(1, +$('f-cada').value || 1), unidade: $('f-unid').value } : undefined,
     fim: rep && $('f-fim').value ? $('f-fim').value : undefined, avisos, para, ativo: $('f-ativo').checked,
   };
   if (editando) dados.lembretes[dados.lembretes.indexOf(editando)] = l; else dados.lembretes.push(l);

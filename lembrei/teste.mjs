@@ -18,3 +18,19 @@ test('mensal fixa no fim do mês', () => { assert.equal(addMeses('2026-01-31', 1
 test('texto padrão não cita o app', () => {
   assert.equal(textoAviso(banho, 1, '2026-10-25'), 'Amanhã: Banho do cachorro');
 });
+
+const seqQua = { id: 'b', titulo: 'Remédio', data: '2026-10-21', repete: { dias: [1, 3], cada: 1 }, avisos: [{ diasAntes: 0, hora: '08:00' }], para: ['Mãe'] };
+test('toda segunda e quarta', () => {
+  // 21/10/2026 é quarta
+  assert.deepEqual(ocorrencias(seqQua, '2026-10-21', '2026-11-04'), ['2026-10-21', '2026-10-26', '2026-10-28', '2026-11-02', '2026-11-04']);
+});
+test('dias da semana não começam antes da primeira data', () => {
+  assert.deepEqual(ocorrencias(seqQua, '2026-10-01', '2026-10-25'), ['2026-10-21']);
+});
+test('segunda e quarta a cada 2 semanas', () => {
+  const l = { ...seqQua, repete: { dias: [1, 3], cada: 2 } };
+  assert.deepEqual(ocorrencias(l, '2026-10-21', '2026-11-12'), ['2026-10-21', '2026-11-02', '2026-11-04']);
+});
+test('dias da semana com data final', () => {
+  assert.deepEqual(ocorrencias({ ...seqQua, fim: '2026-10-27' }, '2026-10-21', '2026-11-30'), ['2026-10-21', '2026-10-26']);
+});
