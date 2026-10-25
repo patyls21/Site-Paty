@@ -1,0 +1,54 @@
+name: Montar app Lembrei
+
+# Monta o aplicativo "Lembrei!" (arquivo .apk) e publica na página de Releases.
+# Roda sozinho quando algo em lembrei/ muda, ou manualmente em Actions > Montar app Lembrei > Run workflow.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'lembrei/**'
+      - '.github/workflows/lembrei.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Testar as regras de datas
+        run: node --test lembrei/teste.mjs
+
+      - name: Montar o APK
+        working-directory: lembrei
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Nomear o arquivo
+        run: cp lembrei/app/build/outputs/apk/debug/app-debug.apk lembrei.apk
+
+      - name: Publicar na página de Releases
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-lembrei
+          name: App Lembrei!
+          body: Aplicativo Android do Lembrei!. Baixe o arquivo lembrei.apk e instale no celular.
+          files: lembrei.apk
+
+      - name: Guardar o APK (para testes fora da main)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lembrei-apk
+          path: lembrei.apk
