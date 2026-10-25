@@ -69,10 +69,13 @@
   // fração que sai da caixinha: o valor todo ou só a metade (cada um paga a sua parte)
   const fator = m => m.fracao === 'metade' ? 0.5 : 1;
   const progDe = m => m.fonte && cofreDe(m) !== null ? Caixinhas.programado(m.fonte) : zerado();
+  // Meta total (opcional, definida por vocês): os gastos lançados ficam DENTRO dela. Se passarem, a meta sobe junto com os gastos.
+  // Sem meta definida, a meta é simplesmente a soma dos gastos previstos.
   const totais = m => {
-    const itens = m.itens || [];
-    const total = Math.round(itens.reduce((s, i) => s + totalItem(i), 0) * fator(m)), pago = Math.round(itens.filter(i => i.pago).reduce((s, i) => s + totalItem(i), 0) * fator(m));
-    return { total, pago, faltaPagar: total - pago };
+    const itens = m.itens || [], f = fator(m);
+    const soma = itens.reduce((s, i) => s + totalItem(i), 0), metaDef = Math.max(0, num(m.metaTotal));
+    const total = Math.round(Math.max(metaDef, soma) * f), pago = Math.round(itens.filter(i => i.pago).reduce((s, i) => s + totalItem(i), 0) * f);
+    return { total, pago, faltaPagar: total - pago, soma: Math.round(soma * f), metaDef: Math.round(metaDef * f) };
   };
   const mesesAte = m => { const [y1, m1] = U.mesAtual().split('-').map(Number), [y2, m2] = m.data.slice(0, 7).split('-').map(Number); return (y2 - y1) * 12 + (m2 - m1); };
 
@@ -132,13 +135,28 @@
       { k: 'fim', rotulo: 'Check-out (volta)', tipo: 'date', req: true, dica: 'Os avisos de "falta pouco" vão de 1 mês antes até o check-out.' },
       { k: 'fonte', rotulo: 'Pago com qual caixinha?', tipo: 'select', opcoes: [['', 'A caixinha mensal das viagens'], ...Store.cofres.lista().map(c => [c.id, `${c.icone || '🐷'} ${c.nome} (caixinha à parte)`])],
         dica: 'Para uma viagem "por fora", crie a caixinha na aba Caixinhas e escolha ela aqui.' },
-      { k: 'fracao', rotulo: 'Quanto desta viagem sai dessa caixinha?', tipo: 'select', opcoes: [['tudo', 'O valor todo'], ['metade', 'Só metade (cada um paga a sua parte)']] }
-    ], v ? { ...v, fim: fim(v), fonte: v.fonte || '', fracao: v.fracao || 'tudo' } : { data: U.hoje(), fim: U.hoje(), fonte: '', fracao: 'tudo' }, f => {
+      { k: 'fracao', rotulo: 'Quanto desta viagem sai dessa caixinha?', tipo: 'select', opcoes: [['tudo', 'O valor todo'], ['metade', 'Só metade (cada um paga a sua parte)']] },
+      { k: 'metaTotal', rotulo: 'Meta total da viagem (R$) — opcional', inputmode: 'decimal', dica: 'Os gastos que você lançar ficam dentro dessa meta. Se passarem dela, a meta sobe junto. Dá para mudar quando quiser.' }
+    ], v ? { ...v, fim: fim(v), fonte: v.fonte || '', fracao: v.fracao || 'tudo', metaTotal: num(v.metaTotal) > 0 ? U.valorInput(num(v.metaTotal)) : '' } : { data: U.hoje(), fim: U.hoje(), fonte: '', fracao: 'tudo', metaTotal: '' }, f => {
       if (f.fim < f.data) { alert('O check-out não pode ser antes do check-in.'); return false; }
-      const o = { nome: f.nome.trim(), data: f.data, fim: f.fim, fonte: f.fonte, fracao: f.fracao };
+      const metaTotal = (f.metaTotal || '').trim() ? U.parseValor(f.metaTotal) : 0;
+      if (!(metaTotal >= 0)) { alert('Meta inválida.'); return false; }
+      const o = { nome: f.nome.trim(), data: f.data, fim: f.fim, fonte: f.fonte, fracao: f.fracao, metaTotal };
       if (v) Store.metas.set(v.id, { ...v, ...o });
       else { const n = Store.metas.add({ ...o, itens: [] }); Store.setConfig({ viagemMetaAtiva: n.id }); }
     });
+  }
+
+  // só a meta total, para mudar rápido (vazio = sem meta definida, vale a soma dos gastos)
+  function formMeta(m) {
+    const t = totais(m);
+    App.form('Meta total da viagem', [
+      { k: 'metaTotal', rotulo: 'Meta total (R$) — vazio se não tiver', inputmode: 'decimal', dica: `Gastos lançados até agora: ${U.brl(t.soma)}. Se eles passarem da meta, a meta sobe junto.` }
+    ], { metaTotal: num(m.metaTotal) > 0 ? U.valorInput(num(m.metaTotal)) : '' }, f => {
+      const metaTotal = (f.metaTotal || '').trim() ? U.parseValor(f.metaTotal) : 0;
+      if (!(metaTotal >= 0)) { alert('Meta inválida.'); return false; }
+      Store.metas.set(m.id, { ...m, metaTotal });
+    }, null, 'Salvar meta');
   }
 
   function formItem(m, it) {
@@ -197,6 +215,14 @@
       const soUm = ids.some(k => resto[k] > 0);
       const proj = saldoViagem(m, m.data) + prog.total, sobra = proj - t.faltaPagar;
       const pct = t.total ? Math.round((t.pago + naCaixa) / t.total * 100) : 0;
+      // acompanhamento: gastos lançados dentro da meta definida (se passar, a meta sobe junto)
+      const acomp = !t.metaDef
+        ? (t.soma ? `<p class="sub" style="margin:0 0 10px">Gastos lançados: <b>${U.brl(t.soma)}</b> (sem meta definida, a meta acompanha os gastos). Para ver quanto ainda cabe, toque em <b>Alterar meta</b>.</p>` : '')
+        : t.soma <= t.metaDef
+          ? App.barra('Gastos lançados × meta', [{ rotulo: 'Lançado', valor: t.soma, cor: '#f4c53d' }, { rotulo: 'Ainda cabe', valor: t.metaDef - t.soma, cor: '#6b5b88' }])
+            + `<p class="sub" style="margin:6px 0 10px">Lançado <b>${U.brl(t.soma)}</b> de <b>${U.brl(t.metaDef)}</b> da meta · ainda cabe <b>${U.brl(t.metaDef - t.soma)}</b>.</p>`
+          : App.barra('Gastos lançados × meta', [{ rotulo: 'Dentro da meta', valor: t.metaDef, cor: '#f4c53d' }, { rotulo: 'Acima da meta', valor: t.soma - t.metaDef, cor: '#e5533d' }])
+            + `<p class="sub" style="margin:6px 0 10px"><b>Passou ${U.brl(t.soma - t.metaDef)}</b> da meta definida (${U.brl(t.metaDef)}). A meta subiu para <b>${U.brl(t.soma)}</b>.</p>`;
       html += `
       <section class="bloco"><h2>🧳 ${U.esc(m.nome)}</h2>
         <p class="sub" style="margin:-4px 0 12px">Check-in <b>${U.dataBR(m.data)}</b> · check-out <b>${U.dataBR(fim(m))}</b> · ${noites(m)} noite(s)<br>Paga com: <b>${cofreDe(m) !== null ? U.esc(cofreDe(m)) + ' (caixinha à parte)' : 'a caixinha mensal das viagens'}</b>${m.fracao === 'metade' ? ' · só a sua metade' : ''}</p>
@@ -212,6 +238,7 @@
             </div>
             <div class="cards" style="margin:0">
               <div class="card"><small>Meta total</small><strong>${U.brl(t.total)}</strong></div>
+              <div class="card"><small>Gastos lançados</small><strong>${U.brl(t.soma)}</strong></div>
               <div class="card"><small>Falta pagar</small><strong>${U.brl(t.faltaPagar)}</strong></div>
               <div class="card"><small>Meses até a viagem</small><strong>${Math.max(0, meses)}</strong></div>
             </div>
@@ -223,8 +250,9 @@
           ${ids.map(k => prog[k] + resto[k] > 0 ? `<div class="card ${cls(k)}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(prog[k] + resto[k])}</strong>${prog[k] > 0 && prog.data[k] ? `<small style="margin-top:4px">${resto[k] > 0 ? U.brl(prog[k]) + ' ' : ''}até ${U.dataBR(prog.data[k]).slice(0, 5)}</small>` : ''}</div>` : '').join('')}
           ${ids.map(k => resto[k] > 0 ? `<div class="card ok"><small>Por mês · ${U.esc(n(k))}</small><strong>${U.brl(Math.ceil(resto[k] / Math.max(1, meses)))}</strong><small style="margin-top:4px">só a parte que falta</small></div>` : '').join('')}
         </div>
-        <div class="acerto">${t.total === 0 ? 'Ainda não há meta: a meta é a soma dos gastos previstos. Toque em <b>+ Gasto previsto</b> e adicione hospedagem, combustível, alimentação… 🧳' : falta === 0 ? (prog.total > 0 ? 'Tudo coberto 💜 Falta só colocar o que já está marcado na caixinha.' : 'Meta batida! 🎉 Já dá para pagar tudo que falta.') : `${m.fonte ? 'Com o que já está marcado na caixinha' : 'Mantendo o aporte padrão'}, na data da viagem a caixinha terá ${U.brl(proj)}: ${sobra >= 0 ? `sobra ${U.brl(sobra)} 💜` : `ainda faltam ${U.brl(-sobra)}.`}`}</div>
-        <div class="filtros"><button class="btn" id="v-item">+ Gasto previsto</button><button class="btn sec" id="v-edit">Editar viagem</button><button class="btn sec" id="v-del">Excluir viagem</button></div>
+        ${acomp}
+        <div class="acerto">${t.total === 0 ? 'Ainda não há meta. Toque em <b>Alterar meta</b> para definir o valor da viagem, ou adicione os gastos com <b>+ Gasto previsto</b> (hospedagem, combustível, alimentação…) 🧳' : falta === 0 ? (prog.total > 0 ? 'Tudo coberto 💜 Falta só colocar o que já está marcado na caixinha.' : 'Meta batida! 🎉 Já dá para pagar tudo que falta.') : `${m.fonte ? 'Com o que já está marcado na caixinha' : 'Mantendo o aporte padrão'}, na data da viagem a caixinha terá ${U.brl(proj)}: ${sobra >= 0 ? `sobra ${U.brl(sobra)} 💜` : `ainda faltam ${U.brl(-sobra)}.`}`}</div>
+        <div class="filtros"><button class="btn" id="v-item">+ Gasto previsto</button><button class="btn sec" id="v-meta">Alterar meta</button><button class="btn sec" id="v-edit">Editar viagem</button><button class="btn sec" id="v-del">Excluir viagem</button></div>
         ${(m.itens || []).length ? `<table><thead><tr><th>Gasto</th><th class="v">Qtd</th><th class="v">Cada</th><th class="v">Total</th><th>Situação</th><th></th></tr></thead><tbody>${m.itens.map(i => `
           <tr><td>${U.esc(i.desc)}</td><td class="v">${String(i.qtd).replace('.', ',')}</td><td class="v">${U.brl(i.unit)}</td><td class="v">${U.brl(totalItem(i))}</td>
           <td><button class="chip ${i.pago ? 'ok' : 'ambos'}" data-p="${i.id}" style="border:0;cursor:pointer" title="Tocar para alternar">${i.pago ? '✔ pago' : '⏳ a pagar'}</button></td>
@@ -259,6 +287,7 @@
     el.querySelectorAll('[data-usar]').forEach(b => b.onclick = () => Store.setConfig({ viagemMetaAtiva: b.dataset.usar }));
     if (m) {
       App.$('#v-item').onclick = () => formItem(m, null);
+      App.$('#v-meta').onclick = () => formMeta(m);
       App.$('#v-edit').onclick = () => formViagem(m);
       App.$('#v-del').onclick = () => { if (confirm('Excluir esta viagem e os gastos previstos dela?')) Store.metas.del(m.id); };
       el.querySelectorAll('[data-ie]').forEach(b => b.onclick = () => formItem(m, m.itens.find(i => i.id === b.dataset.ie)));
