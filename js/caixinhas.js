@@ -271,6 +271,7 @@
       return r;
     },
     ultimoDia: () => Store.cofres.lista().flatMap(cx => (cx.avulsos || []).filter(a => !a.feito).map(a => a.data)).reduce((u, d) => d > u ? d : u, ''),
+    aporteTotal: id => { const c = Store.cofres.lista().find(x => x.id === id); return c ? U.ids().reduce((s, k) => s + num(c['aporte' + k]), 0) : 0; },
     nome: id => { const c = Store.cofres.lista().find(x => x.id === id); return c ? c.nome : null; },
     saldoEm: (id, fim) => { const c = Store.cofres.lista().find(x => x.id === id); return c ? simular(c, fim).saldo : 0; }
   };

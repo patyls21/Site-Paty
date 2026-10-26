@@ -222,6 +222,8 @@
       }
       const soUm = ids.some(k => resto[k] > 0);
       const proj = saldoViagem(m, m.data) + prog.total, sobra = proj - t.faltaPagar;
+      // aporte mensal que já está valendo (da caixinha das viagens ou da caixinha à parte), para o "colocar por mês" não ignorar o que já entra
+      const padrao = m.fonte && cofreDe(m) !== null ? Caixinhas.aporteTotal(m.fonte) : ids.reduce((s, k) => s + num(c['viagemAporte' + k]), 0);
       const pct = t.total ? Math.round((t.pago + naCaixa) / t.total * 100) : 0;
       // acompanhamento: gastos lançados dentro da meta definida (se passar, a meta sobe junto)
       const acomp = !t.metaDef
@@ -253,8 +255,8 @@
           </div>
         </div>
         <div class="cards">
-          ${soUm || (falta === 0 && prog.total > 0) ? '' : `<div class="card ok"><small>Colocar por mês (${ids.length > 1 ? 'todos' : 'total'})</small><strong>${U.brl(Math.ceil(porMes))}</strong></div>
-          ${ids.length > 1 ? `<div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil(porMes / ids.length))}</strong></div>` : ''}`}
+          ${soUm || (falta === 0 && prog.total > 0) ? '' : sobra >= 0 ? `<div class="card ok"><small>Aporte padrão já basta</small><strong>Sobra ${U.brl(sobra)}</strong><small style="margin-top:4px">na data da viagem</small></div>` : `<div class="card ok"><small>Colocar por mês (${ids.length > 1 ? 'todos' : 'total'})</small><strong>${U.brl(Math.ceil(padrao + -sobra / Math.max(1, meses)))}</strong><small style="margin-top:4px">já contando o aporte padrão e o rendimento</small></div>
+          ${ids.length > 1 ? `<div class="card a"><small>Por pessoa</small><strong>${U.brl(Math.ceil((padrao + -sobra / Math.max(1, meses)) / ids.length))}</strong></div>` : ''}`}
           ${ids.map(k => prog[k] + resto[k] > 0 ? `<div class="card ${cls(k)}"><small>Falta colocar · ${U.esc(n(k))}</small><strong>${U.brl(prog[k] + resto[k])}</strong>${prog[k] > 0 && prog.data[k] ? `<small style="margin-top:4px">${resto[k] > 0 ? U.brl(prog[k]) + ' ' : ''}até ${U.dataBR(prog.data[k]).slice(0, 5)}</small>` : ''}</div>` : '').join('')}
           ${ids.map(k => resto[k] > 0 ? `<div class="card ok"><small>Por mês · ${U.esc(n(k))}</small><strong>${U.brl(Math.ceil(resto[k] / Math.max(1, meses)))}</strong><small style="margin-top:4px">só a parte que falta</small></div>` : '').join('')}
         </div>
