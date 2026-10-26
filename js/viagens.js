@@ -22,12 +22,13 @@
   // aporte de cada um no mês: valor e data (padrão: o combinado; ou o que foi alterado naquele mês)
   // retorna { v: { A: valor, … }, d: { A: data, … }, alterado, id }
   const aporteMes = m => {
-    const o = Store.caixinha.lista().find(x => x.mes === m), c = C(), v = {}, d = {};
+    const o = Store.caixinha.lista().find(x => x.mes === m), c = C(), v = {}, d = {}, f = {};
     U.ids().forEach(k => {
       d[k] = (o && o['data' + k]) || diaUtil(m, num(c['viagemDia' + k], 26));
       v[k] = o ? num(o[k]) : num(c['viagemAporte' + k]);
+      f[k] = !!(o && o['feito' + k]);
     });
-    return o ? { v, d, alterado: true, id: o.id } : { v, d, alterado: false };
+    return o ? { v, d, f, alterado: true, id: o.id } : { v, d, f, alterado: false };
   };
   // 120% do CDI: taxa anual efetiva a partir do CDI (252 dias úteis), depois rendimento por dia corrido
   const taxaAno = () => {
@@ -38,13 +39,15 @@
 
   // saldo estimado em uma data: cada depósito entra na data dele e rende todo dia (valores brutos, antes do IR).
   // Se foi informado o saldo real (ancora), o cálculo recomeça dele e só conta os depósitos depois daquela data.
-  function simular(fim) {
-    const ini = inicio(), td = taxaDia(), c = C(), saldoIni = num(c.viagemSaldoInicial);
-    const ancora = c.viagemAncoraData && c.viagemAncoraData <= fim ? c.viagemAncoraData : '';
+  // Depósito de hoje (ou de data futura) só entra no saldo de hoje depois de marcado como "já depositei";
+  // numa projeção para uma data futura, todos os previstos entram.
+  function simular(fim, semAncora) {
+    const ini = inicio(), td = taxaDia(), c = C(), saldoIni = num(c.viagemSaldoInicial), hoje = U.hoje();
+    const ancora = !semAncora && c.viagemAncoraData && c.viagemAncoraData <= fim ? c.viagemAncoraData : '';
     const dep = []; let aportado = 0;
     for (let m = ini; m + '-01' <= fim; m = U.mesSoma(m, 1)) {
       const a = aporteMes(m);
-      U.ids().forEach(k => { const d = a.d[k], v = a.v[k]; if (v > 0 && d <= fim) { aportado += v; dep.push({ d, v }); } });
+      U.ids().forEach(k => { const d = a.d[k], v = a.v[k]; if (v > 0 && d <= fim && (d < hoje || a.f[k] || fim > hoje)) { aportado += v; dep.push({ d, v }); } });
     }
     dep.sort((x, y) => x.d.localeCompare(y.d));
     let bal = ancora ? num(c.viagemAncoraSaldo) : saldoIni, ult = ancora || ini + '-01';
@@ -52,7 +55,11 @@
     dep.forEach(x => { if (ancora && x.d <= ancora) return; render(x.d); bal += x.v; });
     render(fim);
     const saldo = Math.round(bal);
-    return { saldo, aportado, rendimento: saldo - saldoIni - aportado };
+    if (!ancora) return { saldo, aportado, rendimento: saldo - saldoIni - aportado };
+    // com saldo real: o rendimento é o estimado até a data dele + o que rendeu depois; a diferença da estimativa vira "colocado", não rendimento negativo
+    const depois = dep.filter(x => x.d > ancora).reduce((s, x) => s + x.v, 0);
+    const rendimento = simular(ancora, true).rendimento + saldo - num(c.viagemAncoraSaldo) - depois;
+    return { saldo, aportado: saldo - saldoIni - rendimento, rendimento };
   }
 
   // ---------- viagem (meta) ----------
@@ -117,13 +124,14 @@
 
   function formMes(m) {
     const a = aporteMes(m), ids = U.ids(), vals = {};
-    ids.forEach(k => { vals[k] = U.valorInput(a.v[k]); vals['data' + k] = a.d[k]; });
+    ids.forEach(k => { vals[k] = U.valorInput(a.v[k]); vals['data' + k] = a.d[k]; vals['sit' + k] = a.f[k] || a.d[k] < U.hoje() ? 'feito' : 'prog'; });
     App.form('Aporte de ' + U.mesNome(m), ids.flatMap(k => [
       { k, rotulo: `${n(k)} coloca (R$) — 0 se não colocar`, inputmode: 'decimal', req: true },
-      { k: 'data' + k, rotulo: `Data do depósito de ${n(k)}`, tipo: 'date', req: true }
+      { k: 'data' + k, rotulo: `Data do depósito de ${n(k)}`, tipo: 'date', req: true },
+      { k: 'sit' + k, rotulo: `Situação do depósito de ${n(k)}`, tipo: 'select', opcoes: [['feito', 'Já caiu na caixinha'], ['prog', 'Ainda vai cair']] }
     ]), vals, f => {
       const o = { mes: m };
-      for (const k of ids) { const v = U.parseValor(f[k]); if (!(v >= 0)) { alert('Valor inválido.'); return false; } o[k] = v; o['data' + k] = f['data' + k]; }
+      for (const k of ids) { const v = U.parseValor(f[k]); if (!(v >= 0)) { alert('Valor inválido.'); return false; } o[k] = v; o['data' + k] = f['data' + k]; o['feito' + k] = f['sit' + k] === 'feito'; }
       a.id ? Store.caixinha.set(a.id, o) : Store.caixinha.add(o);
     }, a.alterado ? { rotulo: '↩ Voltar ao padrão', fn: () => Store.caixinha.del(a.id) } : null);
   }
@@ -277,13 +285,21 @@
       <p class="sub">Por padrão entra o valor combinado no dia de cada um (fim de semana vira segunda-feira). Se alguém não conseguir colocar, ou depositar em outro dia, toque em ✏️ e ajuste o valor (0 = não colocou) e a data daquele mês.</p>
       <table><thead><tr><th>Mês</th>${U.ids().map(k => `<th class="v">${U.esc(n(k))}</th>`).join('')}<th class="v">Total</th><th></th></tr></thead><tbody>${linhas.map(mm => { const a = aporteMes(mm); return `
         <tr><td>${U.mesNome(mm)}${a.alterado ? ' <span class="chip ambos">alterado</span>' : ''}</td>
-        ${U.ids().map(k => `<td class="v">${U.brl(a.v[k])}<br><span class="sub">${dataCurta(a.d[k])}${a.v[k] > 0 && a.d[k] > hoje ? ' · a cair' : ''}</span></td>`).join('')}<td class="v">${U.brl(U.ids().reduce((s, k) => s + a.v[k], 0))}</td>
+        ${U.ids().map(k => `<td class="v">${U.brl(a.v[k])}<br><span class="sub">${dataCurta(a.d[k])}${a.v[k] > 0 && a.d[k] >= hoje && !a.f[k] ? ` · a cair <button class="btn mini-b" data-ok="${mm}|${k}">Já depositei</button>` : ''}</span></td>`).join('')}<td class="v">${U.brl(U.ids().reduce((s, k) => s + a.v[k], 0))}</td>
         <td><button class="mini" data-mes="${mm}" aria-label="Alterar aporte">✏️</button></td></tr>`; }).join('')}</tbody></table></section>`;
 
     el.innerHTML = html;
     App.$('#v-cfg').onclick = formCaixinha;
     App.$('#v-real').onclick = formSaldoReal;
     el.querySelectorAll('[data-mes]').forEach(b => b.onclick = () => formMes(b.dataset.mes));
+    // "Já depositei": confirma o valor previsto do mês sem mexer nele (a data passa a ser hoje se era futura)
+    el.querySelectorAll('[data-ok]').forEach(b => b.onclick = () => {
+      const [mm, k] = b.dataset.ok.split('|'), a = aporteMes(mm), o = { mes: mm };
+      U.ids().forEach(i => { o[i] = a.v[i]; o['data' + i] = a.d[i]; o['feito' + i] = a.f[i]; });
+      if (a.d[k] > hoje) o['data' + k] = hoje;
+      o['feito' + k] = true;
+      a.id ? Store.caixinha.set(a.id, o) : Store.caixinha.add(o);
+    });
     el.querySelectorAll('[data-usar]').forEach(b => b.onclick = () => Store.setConfig({ viagemMetaAtiva: b.dataset.usar }));
     if (m) {
       App.$('#v-item').onclick = () => formItem(m, null);
