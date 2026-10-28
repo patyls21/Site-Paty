@@ -38,18 +38,14 @@
       const valor = U.parseValor(f.valor), dia = Math.min(28, Math.max(1, parseInt(f.dia, 10) || 1));
       if (!(valor > 0)) { alert('Valor inválido.'); return false; }
       if (!f.pessoa) { alert('Marque pelo menos uma pessoa em "Dividir entre".'); return false; }
-      const o = { ...f, valor, dia };
+      const o = { ...(x || {}), ...f, valor, dia };
       x ? Store.fixos.set(x.id, o) : Store.fixos.add(o);
     });
   }
 
   function lancarFixos() {
-    const m = App.estado.mes; let n = 0;
-    Store.fixos.lista().forEach(x => {
-      if (Store.gastos.lista().some(g => g.fixoId === x.id && g.mes === m)) return;
-      Store.gastos.add({ data: `${m}-${String(x.dia).padStart(2, '0')}`, descricao: x.descricao, valor: x.valor, categoria: x.categoria, pessoa: x.pessoa, forma: x.forma, mes: m, fixoId: x.id }); n++;
-    });
-    alert(n ? `${n} gasto(s) fixo(s) lançado(s) em ${U.mesNome(m)}.` : 'Os fixos já estavam lançados neste mês.');
+    const m = App.estado.mes, r = Store.lancarFixos(m);
+    alert(r.n ? `${r.n} gasto(s) fixo(s) lançado(s) em ${U.mesNome(m)}, já divididos.${r.ja ? ` ${r.ja} já estavam lançados.` : ''}` : 'Os fixos já estavam lançados neste mês (ou já existe um gasto com o mesmo nome).');
   }
 
   function lista() {
@@ -106,7 +102,7 @@
       <h2 class="titulo-sec">Comparativos</h2><div id="cmp"></div>
       <section class="bloco"><h2>🔁 Gastos fixos mensais (streams, Duo Gourmet, render…)</h2>
         ${fx.length ? fx.map(x => `<p class="sub">${U.esc(x.descricao)} — <b>${U.brl(x.valor)}</b> · dia ${x.dia} · ${U.esc(x.categoria)} · ${U.esc(App.rotuloDiv(x.pessoa))}
-          <button class="mini" data-fe="${x.id}" aria-label="Editar">✏️</button><button class="mini" data-fx="${x.id}" aria-label="Excluir">🗑</button></p>`).join('') : '<p class="sub">Cadastre uma vez e lance todo mês com um toque.</p>'}
+          <button class="mini" data-fe="${x.id}" aria-label="Editar">✏️</button><button class="mini" data-fx="${x.id}" aria-label="Excluir">🗑</button></p>`).join('') : '<p class="sub">Cadastre uma vez: o site lança sozinho no dia de cada um, já dividido.</p>'}
         <div class="filtros"><button class="btn sec" id="b-fixo">+ Novo fixo</button>${fx.length ? '<button class="btn ver" id="b-lancar">Lançar fixos deste mês</button>' : ''}</div>
       </section>`;
     function render() { App.navMes(App.$('#nav'), render); lista(); }

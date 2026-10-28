@@ -51,6 +51,43 @@ const Store = (() => {
     del(id) { d[nome] = d[nome].filter(x => x.id !== id); remover(nome, id); avisar(); }
   });
 
+  // ---- gastos fixos mensais (streams, assinaturas…): lançados sozinhos no dia de cada um, já divididos e com controle de pagamento ----
+  const dataFixo = (f, m) => `${m}-${String(Math.min(28, Math.max(1, parseInt(f.dia, 10) || 1))).padStart(2, '0')}`;
+  const norm = s => String(s || '').trim().toLowerCase();
+  const pagVazio = () => { const p = {}; U.ids().forEach(k => { p[k] = { pago: false }; }); return p; };
+  // assume que já foi pago o que cai em fatura vencida (cartão) ou em mês que já passou (outras formas)
+  const jaPassou = (forma, data, hoje) => forma === 'inter' ? U.datasFatura(U.mesFatura(data)).vence < hoje : data.slice(0, 7) < hoje.slice(0, 7);
+  const pagTudo = (data) => { const p = {}; U.ids().forEach(k => { p[k] = { pago: true, data }; }); return p; };
+  // cria o gasto do fixo f no mês m. O id é fixo (fixo-<id>-<mês>): dois aparelhos criando juntos gravam a MESMA linha, sem duplicar.
+  // Não cria se o mês já tem um gasto desse fixo ou outro com o mesmo nome (por exemplo, um que você lançou na mão).
+  function criarGastoFixo(f, m, forcar) {
+    const hoje = U.hoje(), data = dataFixo(f, m);
+    if (!forcar && (data > hoje || (f.ignorar || []).includes(m))) return false;
+    if (d.gastos.some(g => g.data.slice(0, 7) === m && (g.fixoId === f.id || norm(g.descricao) === norm(f.descricao)))) return false;
+    const g = { id: `fixo-${f.id}-${m}`, data, descricao: f.descricao, valor: f.valor, categoria: f.categoria, pessoa: f.pessoa, forma: f.forma, mes: m, fixoId: f.id,
+      adiantou: '', pag: jaPassou(f.forma, data, hoje) ? pagTudo(data) : pagVazio() };
+    d.gastos.push(g); enviar('gastos', g.id, g); return true;
+  }
+  function ignorarFixo(id, m) { // gasto de fixo apagado à mão: não lança de novo naquele mês
+    const i = d.fixos.findIndex(x => x.id === id); if (i < 0) return;
+    const f = { ...d.fixos[i], ignorar: [...new Set([...(d.fixos[i].ignorar || []), m])] };
+    d.fixos[i] = f; enviar('fixos', id, f);
+  }
+  function autoFixos() {
+    const hoje = U.hoje(), mAtual = hoje.slice(0, 7); let mudou = false;
+    d.fixos.forEach(f => {
+      if (!f.desde) { f.desde = mAtual; enviar('fixos', f.id, f); mudou = true; } // a partir do mês atual, sem voltar no tempo
+      for (let m = f.desde; m <= mAtual; m = U.mesSoma(m, 1)) if (criarGastoFixo(f, m, false)) mudou = true;
+    });
+    // gastos de fixos lançados antes do controle de pagamento: entram na lista de quem deve (se a fatura ainda não venceu)
+    d.gastos.forEach(g => {
+      if (!g.fixoId || g.pag || jaPassou(g.forma, g.data, hoje)) return;
+      g.pag = pagVazio(); g.adiantou = g.adiantou || ''; enviar('gastos', g.id, g); mudou = true;
+    });
+    if (mudou) avisar();
+    return mudou;
+  }
+
   // aplica uma linha vinda da nuvem na memória
   function aplicar(colecao, id, dados, apagado) {
     if (colecao === 'config') { if (!apagado) { d.config = Object.assign(padrao().config, dados.config); d.categorias = dados.categorias || d.categorias; } }
@@ -109,7 +146,15 @@ const Store = (() => {
     setMembros(l) { membros = l; avisar(); },
     setConfig(c) { d.config = { ...d.config, ...c }; sb ? enviarConfig() : salvarLocal(); avisar(); },
     setCategorias(l) { d.categorias = l; sb ? enviarConfig() : salvarLocal(); avisar(); },
-    gastos: col('gastos'), inter: col('inter'), acertos: col('acertos'), comprovantes: col('comprovantes'),
+    gastos: (() => { // apagar um gasto de fixo avisa o fixo para não lançar de novo naquele mês
+      const c = col('gastos'), apagar = c.del;
+      c.del = id => { const g = d.gastos.find(x => x.id === id); apagar(id); if (g && g.fixoId) ignorarFixo(g.fixoId, g.data.slice(0, 7)); };
+      return c;
+    })(),
+    inter: col('inter'), acertos: col('acertos'), comprovantes: col('comprovantes'),
+    autoFixos,
+    // botão "Lançar fixos deste mês": lança o que falta do mês m, sem esperar o dia (n = lançados, ja = já existiam)
+    lancarFixos(m) { let n = 0, ja = 0; d.fixos.forEach(f => { if (criarGastoFixo(f, m, true)) n++; else ja++; }); if (n) avisar(); return { n, ja }; },
     fixos: col('fixos'), futuros: col('futuros'), pontos: col('pontos'), viagens: col('viagens'), pix: col('pix'), caixinha: col('caixinha'), metas: col('metas'), cofres: col('cofres'),
     // lançamentos da fatura do cartão: os criados na aba do cartão + gastos do Painel de Compras pagos com "Cartão"
     // a fatura é definida pela DATA da compra e pelo dia de fechamento (config.diaFechamento), não pelo mês do calendário

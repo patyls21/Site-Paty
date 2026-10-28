@@ -302,6 +302,9 @@ const App = (() => {
         t();
       }
       rota();
+      // gastos fixos: lança sozinho os que já chegaram no dia (ao abrir e sempre que o app volta para a tela)
+      Store.autoFixos();
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) Store.autoFixos(); });
       if (typeof Lancar !== 'undefined') Lancar.aoIniciar();
       if (Store.nuvem && estado.papel === 'titular' && !Store.config.configurado && document.querySelector('nav.tabs')) assistente();
     }
